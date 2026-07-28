@@ -1,6 +1,7 @@
 // NPCs: meshes, idle animation, patrols, and everything they say.
+// Labels and speech bubbles are DATA here — main.js draws them as a crisp DOM
+// overlay at full resolution, outside the pixelated 3D buffer.
 import * as THREE from '../vendor/three.module.min.js';
-import { labelSprite, bubbleSprite } from './textures.js';
 
 const SKINS = [0xe8c39e, 0xc98d63, 0x8d5a3b, 0xf0d3b4, 0x6f4429, 0xd9a97c];
 const TOPS = [0x2f3238, 0x1f4d6b, 0x6b2f3a, 0x3b5c40, 0xd8d2c8, 0x4a3f66, 0x8a4a2b];
@@ -77,6 +78,84 @@ function figure({ top, skin, hair, bulk = 1, hood = null, seated = false }) {
   }
 
   g.userData = { head, armL, armR, torso, legH, eyeL, eyeR };
+  return g;
+}
+
+// SQUIRTLE — an actual small blue turtle at a laptop.
+function squirtleFigure() {
+  const g = new THREE.Group();
+  const m = (c) => new THREE.MeshLambertMaterial({ color: c });
+  const blue = 0x63b8e0, cream = 0xf2e3b4, shellC = 0x9c6b3d, rim = 0xe8e0c8;
+
+  const legH = 0.42; // seated
+  // stubby legs
+  for (const s of [-1, 1]) {
+    const leg = new THREE.Mesh(new THREE.CapsuleGeometry(0.07, 0.16, 3, 8), m(blue));
+    leg.position.set(s * 0.12, 0.16, 0.08);
+    g.add(leg);
+  }
+
+  // torso
+  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.185, 0.3, 4, 10), m(blue));
+  torso.position.y = legH + 0.26;
+  g.add(torso);
+
+  // cream belly plate
+  const belly = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8), m(cream));
+  belly.scale.set(0.88, 1.05, 0.55);
+  belly.position.set(0, legH + 0.24, 0.1);
+  g.add(belly);
+
+  // the shell
+  const shell = new THREE.Mesh(new THREE.SphereGeometry(0.23, 12, 10), m(shellC));
+  shell.scale.set(1, 1.02, 0.72);
+  shell.position.set(0, legH + 0.26, -0.13);
+  g.add(shell);
+  const shellRim = new THREE.Mesh(new THREE.TorusGeometry(0.215, 0.028, 6, 18), m(rim));
+  shellRim.position.set(0, legH + 0.26, -0.05);
+  g.add(shellRim);
+
+  // arms out to the keyboard
+  const armGeo = new THREE.CapsuleGeometry(0.055, 0.34, 3, 8);
+  const armL = new THREE.Mesh(armGeo, m(blue));
+  const armR = new THREE.Mesh(armGeo, m(blue));
+  armL.position.set(-0.2, legH + 0.3, 0.02);
+  armR.position.set(0.2, legH + 0.3, 0.02);
+  armL.rotation.z = 0.12; armR.rotation.z = -0.12;
+  g.add(armL, armR);
+
+  // head group (bobbed by the 'type' anim, same contract as figure())
+  const head = new THREE.Group();
+  head.position.y = legH + 0.74;
+  g.add(head);
+  const HR = 0.185;
+  const skull = new THREE.Mesh(new THREE.SphereGeometry(HR, 14, 12), m(blue));
+  head.add(skull);
+
+  const ink = new THREE.MeshBasicMaterial({ color: 0x5a2530 });
+  const eyeGeo = new THREE.BoxGeometry(0.045, 0.055, 0.014);
+  const eyeL = new THREE.Mesh(eyeGeo, ink);
+  const eyeR = new THREE.Mesh(eyeGeo, ink);
+  eyeL.position.set(-0.066, 0.008, HR - 0.014);
+  eyeR.position.set(0.066, 0.008, HR - 0.014);
+  head.add(eyeL, eyeR);
+  const white = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  for (const s of [-1, 1]) {
+    const gl = new THREE.Mesh(new THREE.BoxGeometry(0.016, 0.018, 0.012), white);
+    gl.position.set(s * 0.055, 0.022, HR - 0.006);
+    head.add(gl);
+  }
+  const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.013, 0.013), new THREE.MeshBasicMaterial({ color: 0x35414a }));
+  mouth.position.set(0, -0.075, HR - 0.02);
+  head.add(mouth);
+
+  // curly tail poking past the shell
+  const tail = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.022, 6, 12, Math.PI * 1.5), m(blue));
+  tail.position.set(0.06, legH + 0.08, -0.24);
+  tail.rotation.y = Math.PI / 2;
+  g.add(tail);
+
+  g.userData = { head, armL, armR, legH, eyeL, eyeR };
   return g;
 }
 
@@ -409,13 +488,6 @@ export function buildPeople(scene, world) {
   const root = new THREE.Group();
   scene.add(root);
 
-  function addLabel(g, name, sub, color) {
-    const l = labelSprite(name, color, sub);
-    l.position.y = 2.05;
-    g.add(l);
-    return l;
-  }
-
   function mk(id, opts, x, z, yaw) {
     const g = figure(opts);
     g.position.set(x, 0, z);
@@ -425,10 +497,11 @@ export function buildPeople(scene, world) {
     const npc = {
       id, group: g, name: d?.name ?? id, sub: d?.sub ?? '',
       home: new THREE.Vector2(x, z), yaw,
-      talkedTo: false, stage: 0, bubble: null, bubbleT: 0,
+      talkedTo: false, stage: 0, bubble: null,
       anim: 'idle', animT: Math.random() * 6,
+      labelH: 2.0,
     };
-    if (d) npc.label = addLabel(g, d.name, d.sub, d.color);
+    if (d) npc.labelInfo = { name: d.name, sub: d.sub, color: d.color };
     npcs.push(npc);
     return npc;
   }
@@ -444,11 +517,18 @@ export function buildPeople(scene, world) {
   const atlas = mk('atlas', { top: 0x2f4429, skin: SKINS[3], hair: HAIRS[3], bulk: 1.55 }, 6.3, 2.95, -0.55);
   atlas.anim = 'flex';
 
-  // SQUIRTLE — far corner, hood up
-  const squirtle = mk('squirtle', { top: 0x2b4b7a, skin: SKINS[1], hair: HAIRS[0], hood: 0x3f6db3, seated: true }, 23.2, 1.35, 0.35);
-  squirtle.group.position.y = 0.02;
-  squirtle.fixed = true;
-  squirtle.anim = 'type';
+  // SQUIRTLE — far corner, a small blue turtle at a laptop
+  const squirtleG = squirtleFigure();
+  squirtleG.position.set(23.2, 0.02, 1.35);
+  squirtleG.rotation.y = 0.35;
+  root.add(squirtleG);
+  const squirtle = {
+    id: 'squirtle', group: squirtleG, name: 'SQUIRTLE', sub: DIALOGUE.squirtle.sub,
+    home: new THREE.Vector2(23.2, 1.35), talkedTo: false, stage: 0, bubble: null,
+    anim: 'type', animT: Math.random() * 6, fixed: true, labelH: 1.7,
+    labelInfo: { name: 'SQUIRTLE', sub: DIALOGUE.squirtle.sub, color: DIALOGUE.squirtle.color },
+  };
+  npcs.push(squirtle);
 
   // GTM POD — three of them, working the room
   // the GTM pod — three of them, deliberately unnamed
@@ -461,8 +541,7 @@ export function buildPeople(scene, world) {
   GTM_NAMES.forEach((nm, i) => {
     const p = mk('gtm', { top: [0xf0e6da, 0x1c1c22, 0xdfc7d6][i], skin: SKINS[(i * 2) % SKINS.length], hair: HAIRS[i % HAIRS.length] },
       6 + i * 3.5, 3.9, Math.PI / 2);
-    p.label && p.group.remove(p.label);
-    p.label = addLabel(p.group, nm, 'go-to-market', '#ffc3d8');
+    p.labelInfo = { name: nm, sub: 'go-to-market', color: '#ffc3d8' };
     p.patrol = gtmPatrol;
     p.wp = i * 1;
     p.speed = 0.95;
@@ -493,13 +572,11 @@ export function buildPeople(scene, world) {
   root.add(frogG);
   const frog = {
     id: 'frogu', group: frogG, name: 'FROGU', sub: 'observing',
-    talkedTo: false, stage: 0, animT: 0, anim: 'watch', fixed: true,
+    talkedTo: false, stage: 0, animT: 0, anim: 'watch', fixed: true, bubble: null,
     home: new THREE.Vector2(24.05, 1.58),
+    labelH: 0.62, labelRange: 3.6,
+    labelInfo: { name: 'FROGU', sub: 'observing', color: '#8fe08a' },
   };
-  frog.label = labelSprite('FROGU', '#8fe08a', 'observing');
-  frog.label.position.y = 0.72;
-  frog.label.visible = false;
-  frogG.add(frog.label);
   npcs.push(frog);
 
   // TRUDY — comes down later
@@ -509,15 +586,13 @@ export function buildPeople(scene, world) {
   root.add(trudyG);
   const trudy = {
     id: 'trudy', group: trudyG, name: 'TRUDY', sub: 'chief morale officer',
-    home: new THREE.Vector2(1.2, 5.4), talkedTo: false, stage: 0,
+    home: new THREE.Vector2(1.2, 5.4), talkedTo: false, stage: 0, bubble: null,
     hidden: true, anim: 'trot', animT: 0,
     patrol: [new THREE.Vector2(4, 6.4), new THREE.Vector2(12, 6.8), new THREE.Vector2(18, 4.2), new THREE.Vector2(6, 3.8)],
     wp: 0, speed: 1.05,
+    labelH: 0.85,
+    labelInfo: { name: 'TRUDY', sub: 'chief morale officer', color: '#ffcf9a' },
   };
-  trudy.label = labelSprite('TRUDY', '#ffcf9a', 'chief morale officer');
-  trudy.label.position.y = 0.95;
-  trudy.label.visible = false;
-  trudyG.add(trudy.label);
   npcs.push(trudy);
 
   /* ---------------------------------------------- ambient laptop people --- */
@@ -561,7 +636,6 @@ export function animatePeople(people, dt, t, playerPos) {
     if (n.id === 'frogu') {
       // tracks the room, and you
       const d = playerPos ? Math.hypot(playerPos.x - 24.05, playerPos.z - 1.58) : 99;
-      if (n.label) { n.label.visible = d < 3.6; n.label.material.opacity = 0.95; }
       const want = playerPos && d < 7
         ? Math.atan2(playerPos.x - 24.05, playerPos.z - 1.58)
         : -2.35 + Math.sin(n.animT * 0.22) * 0.55;
@@ -570,10 +644,7 @@ export function animatePeople(people, dt, t, playerPos) {
       while (diff < -Math.PI) diff += Math.PI * 2;
       n.group.rotation.y += diff * Math.min(1, dt * 1.6);
       n.group.position.y = 2.47 + Math.sin(n.animT * 1.7) * 0.006;
-      if (n.bubble) {
-        n.bubbleT -= dt;
-        if (n.bubbleT <= 0) { n.group.remove(n.bubble); n.bubble = null; }
-      }
+      if (n.bubble && (n.bubble.t -= dt) <= 0) n.bubble = null;
       continue;
     }
 
@@ -631,18 +702,7 @@ export function animatePeople(people, dt, t, playerPos) {
       n.group.userData.head.rotation.z = Math.sin(n.animT * 2.2) * 0.12;
     }
 
-    if (n.bubble) {
-      n.bubbleT -= dt;
-      if (n.bubbleT <= 0) { n.group.remove(n.bubble); n.bubble = null; }
-    }
-
-    // labels fade out with distance so the room isn't a wall of nametags
-    if (n.label && playerPos) {
-      const d = Math.hypot(playerPos.x - n.group.position.x, playerPos.z - n.group.position.z);
-      const a = Math.max(0, Math.min(1, (11 - d) / 4));
-      n.label.material.opacity = a * 0.95;
-      n.label.visible = a > 0.02;
-    }
+    if (n.bubble && (n.bubble.t -= dt) <= 0) n.bubble = null;
   }
 
   // ambient typers + speech bubbles
@@ -659,12 +719,9 @@ export function animatePeople(people, dt, t, playerPos) {
 
     a.lineT -= dt;
     if (a.lineT <= 0) {
-      if (a.bubble) { a.group.remove(a.bubble); a.bubble = null; a.lineT = 14 + Math.random() * 40; }
+      if (a.bubble) { a.bubble = null; a.lineT = 14 + Math.random() * 40; }
       else {
-        const b = bubbleSprite(AMBIENT_LINES[(Math.random() * AMBIENT_LINES.length) | 0]);
-        b.position.y = 1.85;
-        a.group.add(b);
-        a.bubble = b;
+        a.bubble = { text: AMBIENT_LINES[(Math.random() * AMBIENT_LINES.length) | 0], t: 4.5 };
         a.lineT = 4.5;
       }
     }
@@ -672,10 +729,5 @@ export function animatePeople(people, dt, t, playerPos) {
 }
 
 export function say(npc, text, dur = 4) {
-  if (npc.bubble) npc.group.remove(npc.bubble);
-  const b = bubbleSprite(text);
-  b.position.y = npc.id === 'trudy' ? 1.1 : 2.45;
-  npc.group.add(b);
-  npc.bubble = b;
-  npc.bubbleT = dur;
+  npc.bubble = { text, t: dur };
 }

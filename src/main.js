@@ -497,6 +497,83 @@ function deliver() {
   setTimeout(() => blip(990, 0.1, 'triangle', 0.04), 80);
 }
 
+/* ------------------------------------------------------- text overlay -- */
+// Names and speech bubbles render as DOM at full resolution, projected over
+// the pixelated canvas — the world is chunky, the words never are.
+const labelLayer = el('labels');
+const overlayNodes = new Map();   // key -> {div, kind}
+const _pv = new THREE.Vector3();
+
+function overlayNode(key, kind) {
+  let n = overlayNodes.get(key);
+  if (!n) {
+    const div = document.createElement('div');
+    div.className = kind;
+    labelLayer.appendChild(div);
+    n = { div, kind, used: true };
+    overlayNodes.set(key, n);
+  }
+  n.used = true;
+  return n;
+}
+
+function projectTo(div, wx, wy, wz, fade) {
+  _pv.set(wx, wy, wz).project(camera);
+  if (_pv.z > 1 || _pv.z < -1) { div.style.opacity = '0'; return false; }
+  const sx = (_pv.x * 0.5 + 0.5) * innerWidth;
+  const sy = (-_pv.y * 0.5 + 0.5) * innerHeight;
+  if (sx < -260 || sx > innerWidth + 260 || sy < -160 || sy > innerHeight + 160) {
+    div.style.opacity = '0'; return false;
+  }
+  div.style.transform = `translate(-50%,-100%) translate(${sx.toFixed(1)}px,${sy.toFixed(1)}px)`;
+  div.style.opacity = String(fade);
+  return true;
+}
+
+function updateOverlay() {
+  for (const n of overlayNodes.values()) n.used = false;
+  const inWorld = S.running && S.mode !== 'end';
+
+  if (inWorld) {
+    people.npcs.forEach((n, ni) => {
+      if (n.hidden) return;
+      const gx = n.group.position.x, gz = n.group.position.z;
+      const d = Math.hypot(P.pos.x - gx, P.pos.z - gz);
+
+      if (n.labelInfo) {
+        const range = n.labelRange ?? 12;
+        const fade = Math.max(0, Math.min(1, (range - d) / 3));
+        if (fade > 0.02) {
+          const node = overlayNode('lab:' + ni, 'nlabel');
+          node.div.innerHTML =
+            `<span class="nm" style="color:${n.labelInfo.color}">${n.labelInfo.name}</span>` +
+            `<span class="sb">${n.labelInfo.sub}</span>`;
+          projectTo(node.div, gx, n.group.position.y + (n.labelH ?? 2.0), gz, fade * 0.95);
+        }
+      }
+      if (n.bubble && d < 15) {
+        const node = overlayNode('bub:' + ni, 'nbubble');
+        node.div.textContent = n.bubble.text;
+        const h = (n.labelH ?? 2.0) + 0.42;
+        projectTo(node.div, gx, n.group.position.y + h, gz, Math.min(1, n.bubble.t / 0.3));
+      }
+    });
+    people.ambient.forEach((a, ai) => {
+      if (!a.bubble) return;
+      const gx = a.group.position.x, gz = a.group.position.z;
+      const d = Math.hypot(P.pos.x - gx, P.pos.z - gz);
+      if (d > 13) return;
+      const node = overlayNode('amb:' + ai, 'nbubble');
+      node.div.textContent = a.bubble.text;
+      projectTo(node.div, gx, 1.78, gz, Math.min(1, a.bubble.t / 0.3) * 0.96);
+    });
+  }
+
+  for (const [key, n] of overlayNodes) {
+    if (!n.used) { n.div.remove(); overlayNodes.delete(key); }
+  }
+}
+
 /* -------------------------------------------------------- interaction -- */
 const tmpV = new THREE.Vector3();
 
@@ -831,7 +908,6 @@ function step(now) {
     S.trudyT -= dt * CFG.MIN_PER_SEC;
     if (S.trudyT <= 0 && people.trudy.hidden) {
       people.trudy.hidden = false;
-      people.trudy.label.visible = true;
       toast('<b>a corgi has entered the cafe.</b> nobody is working now.');
       blip(720, 0.1, 'triangle', 0.05);
       setTimeout(() => blip(960, 0.12, 'triangle', 0.045), 110);
@@ -868,6 +944,7 @@ function step(now) {
 
   animatePeople(people, dt, t, P.pos);
   world.tickAir(dt, t);
+  updateOverlay();
 
   // face NPC labels + bubbles toward the player (sprites already billboard)
   if (S.running && S.mode === 'play') {

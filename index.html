@@ -8,7 +8,12 @@
 <meta property="og:title" content="CORGI CAFE SIMULATOR">
 <meta property="og:description" content="It's 2:47am at 9 Claude Ln. Ship before the sun comes up. There are no corgis.">
 <meta property="og:type" content="website">
+<meta property="og:url" content="https://thoughtcrimegpt.github.io/corgi-cafe-sim/">
+<meta property="og:image" content="https://thoughtcrimegpt.github.io/corgi-cafe-sim/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://thoughtcrimegpt.github.io/corgi-cafe-sim/og.png">
 <meta name="theme-color" content="#e8552f">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23e8552f'/%3E%3Cellipse cx='17' cy='19' rx='11' ry='6' fill='%23fff'/%3E%3Ccircle cx='8' cy='14' r='5' fill='%23fff'/%3E%3Cpolygon points='5,10 4,3 11,9' fill='%23fff'/%3E%3Cpolygon points='12,9 13,3 18,10' fill='%23fff'/%3E%3C/svg%3E">
 <style>
@@ -39,8 +44,8 @@
 
   #meters{position:absolute;left:16px;bottom:calc(16px + var(--pad));width:min(300px,44vw);}
   .meter{margin-bottom:9px;}
-  .meter .lab{display:flex;justify-content:space-between;font-size:10px;letter-spacing:1.6px;
-    font-weight:700;opacity:.82;margin-bottom:4px;text-shadow:0 1px 6px #000;}
+  .meter .lab{display:flex;justify-content:space-between;font-size:11.5px;letter-spacing:1.6px;
+    font-weight:800;opacity:.95;margin-bottom:4px;text-shadow:0 1px 0 #000,0 1px 6px #000;}
   .bar{height:9px;background:rgba(255,255,255,.13);border-radius:6px;overflow:hidden;
     box-shadow:0 2px 10px rgba(0,0,0,.45);}
   .bar i{display:block;height:100%;width:0%;border-radius:6px;transition:width .16s linear;}
@@ -49,16 +54,32 @@
   #cafbar i{background:linear-gradient(90deg,#c98a3a,#f0c46a);}
   #buffs{position:absolute;right:16px;bottom:calc(16px + var(--pad));text-align:right;
     display:flex;flex-direction:column;gap:5px;align-items:flex-end;}
-  .buff{background:rgba(232,85,47,.9);padding:4px 10px;border-radius:20px;font-size:11px;
-    font-weight:700;letter-spacing:.8px;box-shadow:0 3px 12px rgba(0,0,0,.5);}
+  .buff{background:rgba(232,85,47,.92);padding:5px 12px;border-radius:20px;font-size:12.5px;
+    font-weight:800;letter-spacing:.8px;box-shadow:0 3px 12px rgba(0,0,0,.5);
+    text-shadow:0 1px 0 rgba(0,0,0,.4);}
   .buff.bad{background:rgba(60,70,90,.92);}
+
+  /* full-res overlay for in-world text — the 3D scene is pixelated, names are not */
+  #labels{position:fixed;inset:0;pointer-events:none;z-index:4;overflow:hidden;}
+  .nlabel{position:absolute;transform:translate(-50%,-100%);text-align:center;white-space:nowrap;
+    will-change:transform,opacity;}
+  .nlabel .nm{display:block;font-size:15px;font-weight:800;letter-spacing:1.6px;
+    text-shadow:0 1px 0 #000,0 2px 8px rgba(0,0,0,.9);}
+  .nlabel .sb{display:block;font-size:10.5px;font-weight:600;letter-spacing:1px;
+    color:rgba(255,255,255,.75);text-shadow:0 1px 0 #000,0 2px 6px rgba(0,0,0,.9);margin-top:1px;}
+  .nbubble{position:absolute;transform:translate(-50%,-100%);max-width:240px;
+    background:rgba(253,249,244,.97);color:#2a221d;border-radius:10px;padding:7px 11px;
+    font-size:12.5px;line-height:1.4;font-weight:600;text-align:center;
+    box-shadow:0 4px 16px rgba(0,0,0,.45);will-change:transform,opacity;}
+  .nbubble::after{content:'';position:absolute;left:50%;bottom:-6px;margin-left:-6px;
+    border:6px solid transparent;border-top-color:rgba(253,249,244,.97);border-bottom:0;}
 
   #reticle{position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px 0 0 -3px;
     border-radius:50%;background:rgba(255,255,255,.85);box-shadow:0 0 8px rgba(0,0,0,.8);opacity:.65;}
   #prompt{position:absolute;left:50%;top:calc(50% + 34px);transform:translateX(-50%);
-    font-size:13px;font-weight:700;letter-spacing:1.4px;white-space:nowrap;
-    background:rgba(14,10,8,.72);padding:7px 14px;border-radius:8px;display:none;
-    border:1px solid rgba(255,255,255,.14);text-shadow:0 1px 4px #000;}
+    font-size:14px;font-weight:800;letter-spacing:1.4px;white-space:nowrap;
+    background:rgba(14,10,8,.82);padding:8px 16px;border-radius:8px;display:none;
+    border:1px solid rgba(255,255,255,.16);text-shadow:0 1px 0 #000;}
   #prompt b{color:var(--o2);}
 
   #toasts{position:absolute;left:50%;top:16%;transform:translateX(-50%);width:min(420px,86vw);
@@ -163,6 +184,7 @@
 </head>
 <body>
 <div id="app"></div>
+<div id="labels"></div>
 <div id="vig"></div>
 
 <div id="hud">
