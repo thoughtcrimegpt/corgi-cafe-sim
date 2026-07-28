@@ -1,5 +1,14 @@
 # PATCH NOTES
 
+## V1.0.1 (2026-07-28)
+
+- `image-rendering: pixelated` now wins the cascade in Chrome, so the upscale is
+  properly nearest-neighbour instead of falling back to smoothing.
+- The low-res buffer is clamped, so a zero-width viewport can't collapse the
+  canvas to 0px.
+- Split the animation-frame callback from the simulation step so a frame can be
+  driven directly — that's how the full shift was verified end to end.
+
 ## V1.0 — "THE MACHINE IS ALWAYS HOT" (2026-07-28)
 
 First build. A walkable 3D Corgi Cafe at 2:47 AM.
