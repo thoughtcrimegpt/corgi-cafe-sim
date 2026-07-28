@@ -1,0 +1,959 @@
+// CORGI CAFE SIMULATOR — 9 Claude Ln, 24/7.
+// Unofficial fan parody. Menu prices are real; everything else is a joke.
+import * as THREE from '../vendor/three.module.min.js';
+import { buildCafe, ROOM } from './world.js';
+import { buildPeople, animatePeople, DIALOGUE, say } from './people.js';
+import { MENU, ADDONS, priceOf, rollHelloWorld } from './menu.js';
+
+const CFG = {
+  MIN_PER_SEC: 0.85,      // in-game minutes per real second
+  START_MIN: 2 * 60 + 47, // 2:47 AM
+  END_MIN: 6 * 60,        // 6:00 AM
+  SHIP_BASE: 0.62,        // % per second at neutral stats
+  FOC_DRAIN: 1.55,        // focus/sec while coding
+  FOC_REGEN: 0.9,         // focus/sec while up and about
+  CAF_DECAY: 1.15,
+  JITTER_AT: 86,
+  SPEED: 3.05,
+  SPRINT: 1.62,
+  EYE: 1.62,
+  RADIUS: 0.33,
+};
+
+const S = {
+  running: false, over: false,
+  min: CFG.START_MIN,
+  ship: 0, focus: 70, caf: 0, cash: 60,
+  seated: null, mode: 'play',        // play | dialogue | order | end
+  buffs: [],                          // {id,name,t,bad}
+  ach: new Set(),
+  stats: { drinks: 0, food: 0, spent: 0, peakCaf: 0, met: new Set(), followers: 0, sets: 0, pushups: 0 },
+  pending: null,                      // order in progress
+  eventT: 22,
+  trudyT: 62,                         // game-minutes until Trudy comes down
+};
+
+/* ------------------------------------------------------------- three -- */
+const app = document.getElementById('app');
+// No AA — the whole point is hard pixel edges.
+const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
+renderer.setPixelRatio(1);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.LinearToneMapping;
+renderer.toneMappingExposure = 1.0;
+app.appendChild(renderer.domElement);
+
+// The scene renders into a small buffer and gets scaled up by the browser with
+// nearest-neighbour, which is what gives everything its chunky pixel edges.
+const PIXEL_HEIGHT = 328;
+function sizeRenderer() {
+  const aspect = innerWidth / Math.max(1, innerHeight);
+  const h = PIXEL_HEIGHT;
+  const w = Math.round(h * aspect);
+  renderer.setSize(w, h, false);      // false: leave the CSS size alone
+  camera.aspect = aspect;
+  camera.updateProjectionMatrix();
+}
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0b0f18);
+scene.fog = new THREE.Fog(0x141019, 22, 62);
+
+const camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.05, 200);
+sizeRenderer();
+const world = buildCafe(scene);
+const people = buildPeople(scene, world);
+
+addEventListener('resize', sizeRenderer);
+
+/* ------------------------------------------------------------ player -- */
+const P = {
+  pos: new THREE.Vector3(1.4, CFG.EYE, 5.4),
+  vel: new THREE.Vector3(),
+  yaw: -Math.PI / 2, pitch: -0.04,
+  bob: 0, sway: 0,
+};
+
+const keys = {};
+addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (e.code === 'KeyE' || e.code === 'Space') { e.preventDefault(); onAction(); }
+  if (e.code === 'KeyM') toggleAudio();
+  if (e.code === 'Escape' && S.mode === 'order') closeOrder();
+});
+addEventListener('keyup', e => { keys[e.code] = false; });
+
+let locked = false, dragging = false, dragX = 0, dragY = 0;
+const cv = renderer.domElement;
+
+cv.addEventListener('mousedown', e => {
+  if (!S.running || S.mode !== 'play' || isTouch) return;
+  // pointer lock is the good path, but it's blocked in embedded frames —
+  // fall back to click-drag so looking around always works.
+  if (!locked && cv.requestPointerLock) {
+    const r = cv.requestPointerLock();
+    if (r && r.catch) r.catch(() => {});
+  }
+  dragging = true; dragX = e.clientX; dragY = e.clientY;
+});
+addEventListener('mouseup', () => { dragging = false; });
+addEventListener('blur', () => { dragging = false; });
+
+document.addEventListener('pointerlockchange', () => {
+  locked = document.pointerLockElement === cv;
+  if (locked) dragging = false;
+});
+document.addEventListener('pointerlockerror', () => { locked = false; });
+
+document.addEventListener('mousemove', e => {
+  if (!S.running || S.mode !== 'play') return;
+  let dx = 0, dy = 0;
+  if (locked) { dx = e.movementX; dy = e.movementY; }
+  else if (dragging) { dx = e.clientX - dragX; dy = e.clientY - dragY; dragX = e.clientX; dragY = e.clientY; }
+  else return;
+  P.yaw -= dx * 0.0024;
+  P.pitch -= dy * 0.0024;
+  P.pitch = Math.max(-1.2, Math.min(1.1, P.pitch));
+});
+
+/* touch */
+const isTouch = matchMedia('(pointer:coarse)').matches;
+const touchUI = document.getElementById('touch');
+let stickVec = { x: 0, y: 0 };
+if (isTouch) {
+  touchUI.style.display = 'block';
+  const stick = document.getElementById('stick'), knob = document.getElementById('knob');
+  let sid = null, sc = { x: 0, y: 0 };
+  const R = 52;
+  stick.addEventListener('touchstart', e => {
+    const t = e.changedTouches[0]; sid = t.identifier;
+    const r = stick.getBoundingClientRect();
+    sc = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    e.preventDefault();
+  }, { passive: false });
+  addEventListener('touchmove', e => {
+    for (const t of e.changedTouches) {
+      if (t.identifier === sid) {
+        let dx = t.clientX - sc.x, dy = t.clientY - sc.y;
+        const d = Math.hypot(dx, dy) || 1;
+        const k = Math.min(1, d / R);
+        stickVec = { x: (dx / d) * k, y: (dy / d) * k };
+        knob.style.transform = `translate(${stickVec.x * R}px,${stickVec.y * R}px)`;
+      }
+    }
+  }, { passive: false });
+  addEventListener('touchend', e => {
+    for (const t of e.changedTouches) {
+      if (t.identifier === sid) { sid = null; stickVec = { x: 0, y: 0 }; knob.style.transform = ''; }
+    }
+  });
+  // look drag on the right half
+  let lid = null, lx = 0, ly = 0;
+  renderer.domElement.addEventListener('touchstart', e => {
+    const t = e.changedTouches[0];
+    if (t.clientX > innerWidth * 0.34) { lid = t.identifier; lx = t.clientX; ly = t.clientY; }
+  }, { passive: true });
+  renderer.domElement.addEventListener('touchmove', e => {
+    for (const t of e.changedTouches) {
+      if (t.identifier === lid) {
+        P.yaw -= (t.clientX - lx) * 0.0055;
+        P.pitch -= (t.clientY - ly) * 0.0045;
+        P.pitch = Math.max(-1.2, Math.min(1.1, P.pitch));
+        lx = t.clientX; ly = t.clientY;
+      }
+    }
+  }, { passive: true });
+  renderer.domElement.addEventListener('touchend', e => {
+    for (const t of e.changedTouches) if (t.identifier === lid) lid = null;
+  });
+  const act = document.getElementById('tact');
+  act.addEventListener('touchstart', e => { e.preventDefault(); onAction(); }, { passive: false });
+}
+
+/* ------------------------------------------------------------ audio --- */
+let AC = null, audioOn = true, masterGain = null;
+function initAudio() {
+  if (AC) return;
+  try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch { return; }
+  masterGain = AC.createGain();
+  masterGain.gain.value = 0.5;
+  masterGain.connect(AC.destination);
+
+  // room tone: filtered noise
+  const len = AC.sampleRate * 3;
+  const buf = AC.createBuffer(1, len, AC.sampleRate);
+  const dch = buf.getChannelData(0);
+  let last = 0;
+  for (let i = 0; i < len; i++) {
+    const w = Math.random() * 2 - 1;
+    last = (last + 0.02 * w) / 1.02;
+    dch[i] = last * 3.2;
+  }
+  const src = AC.createBufferSource();
+  src.buffer = buf; src.loop = true;
+  const lp = AC.createBiquadFilter();
+  lp.type = 'lowpass'; lp.frequency.value = 420;
+  const g = AC.createGain(); g.gain.value = 0.34;
+  src.connect(lp); lp.connect(g); g.connect(masterGain);
+  src.start();
+}
+function blip(freq, dur = 0.06, type = 'square', vol = 0.06) {
+  if (!AC || !audioOn) return;
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = type; o.frequency.value = freq;
+  g.gain.setValueAtTime(vol, AC.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.0001, AC.currentTime + dur);
+  o.connect(g); g.connect(masterGain);
+  o.start(); o.stop(AC.currentTime + dur);
+}
+function hiss(dur = 0.7, vol = 0.1) {
+  if (!AC || !audioOn) return;
+  const len = AC.sampleRate * dur;
+  const b = AC.createBuffer(1, len, AC.sampleRate);
+  const d = b.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+  const s = AC.createBufferSource(); s.buffer = b;
+  const f = AC.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 2600; f.Q.value = 0.9;
+  const g = AC.createGain(); g.gain.value = vol;
+  s.connect(f); f.connect(g); g.connect(masterGain);
+  s.start();
+}
+function toggleAudio() {
+  audioOn = !audioOn;
+  if (masterGain) masterGain.gain.value = audioOn ? 0.5 : 0;
+  toast(audioOn ? 'sound on' : 'sound off');
+}
+
+/* --------------------------------------------------------------- UI --- */
+const el = id => document.getElementById(id);
+const promptEl = el('prompt'), toastsEl = el('toasts');
+
+function toast(msg, ms = 2600) {
+  const d = document.createElement('div');
+  d.className = 'toast';
+  d.innerHTML = msg;
+  toastsEl.appendChild(d);
+  setTimeout(() => { d.style.transition = 'opacity .4s'; d.style.opacity = '0'; setTimeout(() => d.remove(), 420); }, ms);
+}
+
+function fmtClock(m) {
+  m = Math.floor(m) % 1440;
+  let h = Math.floor(m / 60), mm = m % 60;
+  const ap = h < 12 ? 'AM' : 'PM';
+  let hh = h % 12; if (hh === 0) hh = 12;
+  return `${hh}:${String(mm).padStart(2, '0')}<span style="font-size:15px"> ${ap}</span>`;
+}
+
+function updateHUD() {
+  el('clock').innerHTML = fmtClock(S.min) + '<div id="clocksub">9 CLAUDE LN · OPEN 24/7</div>';
+  el('cash').innerHTML = '$' + S.cash.toFixed(2) + '<div id="cashsub">ON THE CARD</div>';
+  el('shipv').textContent = S.ship.toFixed(0) + '%';
+  el('focv').textContent = Math.round(S.focus);
+  el('cafv').textContent = Math.round(S.caf);
+  el('shipbar').firstElementChild.style.width = S.ship + '%';
+  el('focbar').firstElementChild.style.width = S.focus + '%';
+  el('cafbar').firstElementChild.style.width = S.caf + '%';
+  const b = el('buffs');
+  b.innerHTML = S.buffs.map(x =>
+    `<div class="buff${x.bad ? ' bad' : ''}">${x.name}${x.t != null ? ' ' + Math.ceil(x.t) + 's' : ''}</div>`
+  ).join('');
+}
+
+function addBuff(id, name, t, bad) {
+  const ex = S.buffs.find(b => b.id === id);
+  if (ex) { ex.t = t; return; }
+  S.buffs.push({ id, name, t, bad });
+}
+const hasBuff = id => S.buffs.some(b => b.id === id);
+const dropBuff = id => { S.buffs = S.buffs.filter(b => b.id !== id); };
+
+function ach(id) {
+  if (S.ach.has(id)) return;
+  S.ach.add(id);
+  toast('★ ' + id);
+  blip(880, 0.09, 'triangle', 0.05);
+  setTimeout(() => blip(1320, 0.12, 'triangle', 0.045), 90);
+}
+
+/* --------------------------------------------------------- dialogue --- */
+const dlg = el('dlg');
+let dstate = null;
+
+function openDialogue(npc, lines, choice, onChoice) {
+  S.mode = 'dialogue';
+  document.exitPointerLock?.();
+  dstate = { npc, lines: lines.slice(), i: 0, choice, onChoice };
+  dlg.style.display = 'block';
+  el('dlgname').innerHTML = `${npc.member || npc.name} <span>${npc.member ? 'gtm' : npc.sub}</span>`;
+  showLine();
+}
+function showLine() {
+  const d = dstate;
+  if (!d) return;
+  if (d.i < d.lines.length) {
+    el('dlgtext').textContent = d.lines[d.i];
+    el('dlgchoices').innerHTML = '';
+    el('dlghint').style.display = 'block';
+    blip(320 + Math.random() * 60, 0.03, 'square', 0.028);
+  } else if (d.choice) {
+    el('dlgtext').textContent = d.choice.prompt;
+    el('dlghint').style.display = 'none';
+    const c = el('dlgchoices');
+    c.innerHTML = '';
+    d.choice.options.forEach(o => {
+      const b = document.createElement('button');
+      b.className = 'btn' + (o.tag === 'decline' || o.tag === 'no' || o.tag === 'grass' ? ' ghost' : '');
+      b.textContent = o.label;
+      b.onclick = (ev) => { ev.stopPropagation(); const cb = d.onChoice; closeDialogue(); cb && cb(o.tag); };
+      c.appendChild(b);
+    });
+  } else {
+    closeDialogue();
+  }
+}
+function advanceDialogue() {
+  if (!dstate) return;
+  if (dstate.i < dstate.lines.length) { dstate.i++; showLine(); }
+  else if (!dstate.choice) closeDialogue();
+}
+function closeDialogue() {
+  dlg.style.display = 'none';
+  dstate = null;
+  if (!S.over) S.mode = S.seated ? 'play' : 'play';
+}
+dlg.addEventListener('click', e => { if (e.target.tagName !== 'BUTTON') advanceDialogue(); });
+
+/* ------------------------------------------------------------ order --- */
+let cart = [], selAddons = new Set();
+
+function addToCart(item, large) {
+  const line = cart.find(l => l.item === item && l.large === large);
+  if (line) line.qty++;
+  else cart.push({ item, large, qty: 1 });
+  renderCart();
+  blip(560, 0.04, 'triangle', 0.03);
+}
+
+function buildMenuUI() {
+  const w = el('menuwrap');
+  w.innerHTML = '';
+  MENU.forEach(sec => {
+    const d = document.createElement('div');
+    d.className = 'sec';
+    d.innerHTML = `<h3>${sec.name.toUpperCase()}</h3>`;
+    sec.items.forEach(it => {
+      const r = document.createElement('div');
+      r.className = 'item';
+      const pr = it.hi ? `$${it.price.toFixed(2)}–${it.hi.toFixed(2)}` : `$${it.price.toFixed(2)}`;
+      r.innerHTML =
+        `<span class="nm">${it.name}${it.tag ? ` <span class="tg">· ${it.tag}</span>` : ''}</span>` +
+        `<span class="pr">${pr}</span>` +
+        `<button class="add" data-l="0">ADD</button>` +
+        (it.hi ? `<button class="add" data-l="1">+ LG</button>` : '');
+      r.querySelectorAll('.add').forEach(b => {
+        b.onclick = (e) => { e.stopPropagation(); addToCart(it, b.dataset.l === '1'); };
+      });
+      r.onclick = () => addToCart(it, false);
+      d.appendChild(r);
+    });
+    w.appendChild(d);
+  });
+  const ad = document.createElement('div');
+  ad.className = 'sec';
+  ad.id = 'addonsec';
+  w.appendChild(ad);
+  renderAddons();
+}
+
+function renderAddons() {
+  const ad = el('addonsec');
+  if (!ad) return;
+  let html = '<h3>ADD-ONS <span style="opacity:.45;letter-spacing:1px">· applied to the whole order</span></h3><div class="addons">';
+  ADDONS.forEach(a => {
+    html += `<div class="chip${selAddons.has(a.id) ? ' on' : ''}" data-add="${a.id}">${a.name} +$${a.price.toFixed(2)}</div>`;
+  });
+  html += '</div>';
+  ad.innerHTML = html;
+  ad.querySelectorAll('.chip').forEach(c => {
+    c.onclick = () => {
+      const id = c.dataset.add;
+      selAddons.has(id) ? selAddons.delete(id) : selAddons.add(id);
+      renderAddons(); renderCart();
+    };
+  });
+}
+
+function orderTotal() {
+  let t = 0;
+  cart.forEach(l => { t += priceOf(l.item, l.large) * l.qty; });
+  ADDONS.forEach(a => { if (selAddons.has(a.id)) t += a.price; });
+  return t;
+}
+
+function renderCart() {
+  const list = el('cartlist');
+  if (!cart.length && !selAddons.size) {
+    list.innerHTML = '<span class="empty">tap items to build your order</span>';
+  } else {
+    list.innerHTML = cart.map((l, i) =>
+      `<span class="cartchip">${l.qty > 1 ? l.qty + '× ' : ''}${l.item.name}${l.large ? ' (LG)' : ''}` +
+      ` <b>$${(priceOf(l.item, l.large) * l.qty).toFixed(2)}</b><i data-i="${i}">✕</i></span>`
+    ).join('') + ADDONS.filter(a => selAddons.has(a.id)).map(a =>
+      `<span class="cartchip">+ ${a.name} <b>$${a.price.toFixed(2)}</b></span>`
+    ).join('');
+    list.querySelectorAll('i[data-i]').forEach(x => {
+      x.onclick = () => {
+        const i = +x.dataset.i;
+        if (cart[i].qty > 1) cart[i].qty--; else cart.splice(i, 1);
+        renderCart();
+      };
+    });
+  }
+  const t = orderTotal();
+  el('ordertotal').innerHTML = '$' + t.toFixed(2) +
+    (t > S.cash ? ' <span style="color:#ff6b5c">over budget</span>' : ' <span>TOTAL</span>');
+}
+
+function openOrder() {
+  S.mode = 'order';
+  document.exitPointerLock?.();
+  cart = []; selAddons.clear();
+  buildMenuUI(); renderCart();
+  el('order').classList.add('on');
+}
+function closeOrder() {
+  el('order').classList.remove('on');
+  if (!S.over) S.mode = 'play';
+}
+el('ordercancel').onclick = closeOrder;
+el('ordergo').onclick = () => {
+  if (!cart.length) { toast('pick something. nico is watching.'); return; }
+  const total = orderTotal();
+  if (total > S.cash) { toast('declined. (the card, not you.)'); blip(140, 0.2, 'sawtooth', 0.05); return; }
+  S.cash -= total;
+  S.stats.spent += total;
+
+  const addons = ADDONS.filter(a => selAddons.has(a.id));
+  const lines = [];
+  let prep = 0, units = 0;
+  for (const l of cart) {
+    for (let n = 0; n < l.qty; n++) {
+      let served = l.item;
+      if (l.item.special === 'random') {
+        ach('HELLO WORLD');
+        const roll = rollHelloWorld();
+        served = { ...roll, name: 'Hello World → ' + roll.name };
+      }
+      lines.push({ served, base: l.item, large: l.large && !!l.item.hi });
+      prep = Math.max(prep, (l.item.prep ?? 5) * (l.large ? 1.15 : 1));
+      units++;
+      if (l.item.protein) ach('$14 BREAKFAST');
+      if (l.item.name === 'The Pentagon') ach('THE PENTAGON');
+    }
+  }
+  if (units >= 4) ach('ORDERED FOR THE TABLE');
+  // one barista, several drinks
+  prep += Math.max(0, units - 1) * 1.6;
+
+  S.pending = { lines, addons, t: prep, units };
+  closeOrder();
+  if (prep <= 0.1) deliver();
+  else {
+    toast(units > 1
+      ? `nico starts your <b>${units} items</b>`
+      : `nico starts your <b>${lines[0].served.name}</b>${lines[0].large ? ' (large)' : ''}`);
+    hiss(0.9, 0.09);
+    say(people.nico, units > 2 ? 'all of it? ok. give me a minute.' : prep > 7 ? 'blender. sorry. everyone, sorry.' : 'on it.', 3);
+  }
+};
+
+function deliver() {
+  const o = S.pending; if (!o) return;
+  S.pending = null;
+  let caf = 0, foc = 0;
+
+  for (const l of o.lines) {
+    let c = l.served.caf ?? 0, f = l.served.foc ?? 0;
+    if (l.large) { c *= 1.3; f *= 1.2; }
+    caf += c; foc += f;
+    if (l.served.ship) S.ship = Math.min(100, S.ship + l.served.ship);
+    if (l.base.kind === 'food') S.stats.food++; else S.stats.drinks++;
+    if (l.base.special === 'shield') addBuff('shield', 'SECURED', null);
+    if (l.base.special === 'reset') { dropBuff('jitters'); S.caf = Math.min(S.caf, 70); toast('the jitters are gone. so is your edge, slightly.'); }
+    if (l.base.special === 'expense') { S.cash += priceOf(l.base, l.large) * 0.5; toast('expensed. half back. this is what infrastructure feels like.'); }
+    if (l.base.protein) { addBuff('protein', 'PROTEIN', 60); S.stats.protein = (S.stats.protein || 0) + l.base.protein; }
+  }
+  o.addons.forEach(a => { caf += a.caf; foc += a.foc; });
+  if (o.addons.some(a => a.id === 'creatine')) { S.stats.creatine = true; ach('CREATINE'); }
+
+  S.caf = Math.min(100, S.caf + caf);
+  S.focus = Math.min(100, S.focus + foc);
+  if (S.caf >= 100) ach('WIRED IN');
+
+  toast(o.lines.length > 1
+    ? `order up: <b>${o.lines.length} items</b>. you are carrying a tray now.`
+    : `order up: <b>${o.lines[0].served.name}</b>`);
+  blip(660, 0.08, 'triangle', 0.05);
+  setTimeout(() => blip(990, 0.1, 'triangle', 0.04), 80);
+}
+
+/* -------------------------------------------------------- interaction -- */
+const tmpV = new THREE.Vector3();
+
+function interactables() {
+  const list = [];
+  const cp = P.pos;
+  const near = (x, z, r) => (cp.x - x) ** 2 + (cp.z - z) ** 2 < r * r;
+
+  // counter
+  if (near(20.4, 7.6, 2.6)) list.push({ kind: 'order', label: 'ORDER AT THE COUNTER', x: 20.4, z: 7.9 });
+
+  for (const n of people.npcs) {
+    if (n.hidden) continue;
+    const x = n.group.position.x, z = n.group.position.z;
+    if (near(x, z, n.id === 'trudy' ? 1.9 : n.id === 'frogu' ? 1.9 : 2.4)) {
+      const nm = n.member || n.name;
+      list.push({ kind: 'npc', npc: n, label: (n.id === 'trudy' ? 'PET ' : 'TALK TO ') + nm, x, z });
+    }
+  }
+
+  // seats
+  if (!S.seated) {
+    let best = null, bd = 1.9;
+    for (const s of world.seats) {
+      if (s.taken) continue;
+      const d = Math.hypot(s.pos.x - cp.x, s.pos.z - cp.z);
+      if (d < bd) { bd = d; best = s; }
+    }
+    if (best) list.push({ kind: 'sit', seat: best, label: 'SIT DOWN AND WORK', x: best.pos.x, z: best.pos.z });
+  } else {
+    list.push({ kind: 'stand', label: 'STAND UP', x: cp.x, z: cp.z });
+  }
+
+  // poster
+  if (near(8.6, 1.1, 2.0)) list.push({ kind: 'poster', label: 'READ THE POSTER', x: 8.6, z: 0.6 });
+
+  return list;
+}
+
+function bestTarget() {
+  const list = interactables();
+  if (!list.length) return null;
+  const fx = Math.sin(P.yaw), fz = Math.cos(P.yaw);
+  let best = null, bs = -1;
+  for (const it of list) {
+    if (it.kind === 'stand') return it;
+    const dx = it.x - P.pos.x, dz = it.z - P.pos.z;
+    const d = Math.hypot(dx, dz) || 0.001;
+    const dot = (dx / d) * -fx + (dz / d) * -fz;
+    const score = dot * 2 - d * 0.25;
+    // if you're practically on top of it, facing doesn't matter
+    if ((dot > 0.25 || d < 0.85) && score > bs) { bs = score; best = it; }
+  }
+  return best;
+}
+
+let curTarget = null;
+
+function onAction() {
+  if (!S.running) { if (S.mode !== 'end') startGame(); return; }
+  if (S.mode === 'dialogue') { advanceDialogue(); return; }
+  if (S.mode === 'order') return;
+  if (S.mode !== 'play') return;
+  const t = curTarget;
+  if (!t) return;
+
+  if (t.kind === 'order') { openOrder(); return; }
+  if (t.kind === 'sit') {
+    t.seat.taken = true;
+    S.seated = t.seat;
+    P.pos.set(t.seat.pos.x, 1.22, t.seat.pos.z);
+    P.yaw = t.seat.yaw + Math.PI;
+    toast('you are working. focus burns. coffee helps.');
+    return;
+  }
+  if (t.kind === 'stand') {
+    S.seated.taken = false;
+    S.seated = null;
+    P.pos.y = CFG.EYE;
+    return;
+  }
+  if (t.kind === 'poster') {
+    ach('THERE ARE NO CORGIS');
+    openDialogue({ name: 'THE POSTER', sub: 'laminated' }, [
+      'TRUDY, 2 — Chief Morale Officer. Lives upstairs.',
+      'Does not do meet-and-greets. Please stop asking the baristas where the corgis are.',
+      'There are no corgis in the cafe.',
+    ]);
+    return;
+  }
+  if (t.kind === 'npc') { talkTo(t.npc); return; }
+}
+
+function talkTo(n) {
+  const d = DIALOGUE[n.id];
+  S.stats.met.add(n.member || n.name);
+  n.frozen = true;
+  setTimeout(() => { n.frozen = false; }, 5000);
+
+  if (n.id === 'trudy') {
+    ach('PET THE DOG');
+    S.focus = 100;
+    addBuff('locked', 'LOCKED IN', 30);
+    openDialogue(n, [
+      '(she came downstairs. nobody in the room says anything. everyone is aware.)',
+      '(you pet the dog. the whole cafe is watching you pet the dog.)',
+      '(focus fully restored. this is the most productive thing that will happen tonight.)',
+    ]);
+    return;
+  }
+
+  if (!n.talkedTo) {
+    n.talkedTo = true;
+    if (n.id === 'nico') {
+      openDialogue(n, d.intro, null, null);
+      S.caf = Math.min(100, S.caf + 25);
+      ach('THERE ARE NO CORGIS');
+      setTimeout(() => toast('free espresso. <b>+25 caffeine</b>'), 400);
+      hiss(0.6, 0.08);
+      return;
+    }
+    openDialogue(n, d.intro, d.choice, tag => resolveChoice(n, tag));
+    return;
+  }
+
+  const pool = d.repeat;
+  openDialogue(n, pool[(Math.random() * pool.length) | 0], null, null);
+}
+
+function resolveChoice(n, tag) {
+  const d = DIALOGUE[n.id];
+  if (n.id === 'atlas') {
+    if (tag === 'set') {
+      ach('DID THE SET');
+      S.min += 12;
+      S.stats.sets++; S.stats.pushups = (S.stats.pushups || 0) + 20;
+      S.focus = Math.min(100, S.focus + 15);
+      addBuff('motiv', 'MOTIVATED ×1.4', 45);
+      toast('twenty reps. <b>12 minutes gone. worth it.</b>');
+      setTimeout(() => openDialogue(n, d.after.set), 260);
+    } else {
+      S.focus = Math.max(0, S.focus - 4);
+      ach('NOTED');
+      setTimeout(() => openDialogue(n, d.after.decline), 260);
+    }
+    return;
+  }
+  if (n.id === 'squirtle') {
+    if (tag === 'deeper') {
+      if (Math.random() < 0.45) {
+        ach('GNOSIS');
+        S.ship = Math.min(100, S.ship + 11);
+        toast('<b>GNOSIS.</b> he said one weird thing and now you understand your own bug. +11%');
+        setTimeout(() => openDialogue(n, d.after.deeperGood), 260);
+      } else {
+        S.min += 16;
+        S.focus = Math.max(0, S.focus - 10);
+        toast('you lost <b>16 minutes</b> to a thread about agency.');
+        setTimeout(() => openDialogue(n, d.after.deeperBad), 260);
+      }
+    } else {
+      ach('TOUCHED GRASS');
+      S.focus = Math.min(100, S.focus + 10);
+      setTimeout(() => openDialogue(n, d.after.grass), 260);
+    }
+    return;
+  }
+  if (n.id === 'gtm') {
+    if (tag === 'take') {
+      ach('FULLY INSURED');
+      S.min += 10;
+      addBuff('covered', 'COVERED', null);
+      S.cash += 6;
+      toast('you are insured. <b>one bad thing will bounce off you.</b>');
+      setTimeout(() => openDialogue(n, d.after.take), 260);
+    } else {
+      n.followUp = true;
+      setTimeout(() => openDialogue(n, d.after.no), 260);
+    }
+    return;
+  }
+  if (n.id === 'vc') {
+    if (tag === 'take') {
+      S.min += 14;
+      S.cash += 40;
+      S.ship = Math.min(100, S.ship + 2);
+      ach('TOOK THE MEETING');
+      toast('he covered your tab. <b>+$40.</b> he also had one good idea. +2%');
+      setTimeout(() => openDialogue(n, d.after.take), 260);
+    } else {
+      S.stats.followers += 1;
+      toast('he followed you. <b>+1 follower.</b>');
+      setTimeout(() => openDialogue(n, d.after.no), 260);
+    }
+  }
+}
+
+/* ------------------------------------------------------------ events -- */
+const EVENTS = [
+  { bad: true, t: 'your cofounder: "quick call?" it is never quick.', foc: -9 },
+  { bad: true, t: 'someone takes a call on speaker three feet away.', foc: -8 },
+  { bad: true, t: 'the grinder goes off like a jet engine.', foc: -5 },
+  { bad: true, t: 'the timeline pulls you under for a minute.', foc: -6, min: 4 },
+  { bad: true, t: 'a stranger asks if you know where the corgis are.', foc: -4 },
+  { bad: false, t: 'a genuinely good idea arrives, unprompted.', ship: 4 },
+  { bad: false, t: 'the room goes quiet at exactly the right moment.', foc: 8 },
+];
+
+function fireEvent() {
+  const roll = Math.random();
+  // people-driven interrupts
+  if (roll < 0.34 && !hasBuff('shield') && !hasBuff('covered')) {
+    const who = Math.random() < 0.55
+      ? people.gtm[(Math.random() * people.gtm.length) | 0]
+      : people.vc;
+    who.approach = new THREE.Vector2(P.pos.x, P.pos.z);
+    setTimeout(() => { who.approach = null; }, 14000);
+    say(who, who.id === 'vc' ? 'hey — quick question.' : 'hi! sorry — one quick thing.', 4);
+    toast(`<b>${who.member || who.name}</b> is walking over.`);
+    return;
+  }
+  const e = EVENTS[(Math.random() * EVENTS.length) | 0];
+  if (e.bad && (hasBuff('shield') || hasBuff('covered'))) {
+    dropBuff(hasBuff('shield') ? 'shield' : 'covered');
+    toast('something bad tried to happen. you were covered.');
+    return;
+  }
+  if (e.foc) S.focus = Math.max(0, Math.min(100, S.focus + e.foc));
+  if (e.ship) S.ship = Math.min(100, S.ship + e.ship);
+  if (e.min) S.min += e.min;
+  toast(e.t);
+  if (e.bad) blip(180, 0.12, 'sawtooth', 0.035);
+}
+
+/* -------------------------------------------------------------- loop -- */
+const collide = world.colliders;
+
+function move(dt) {
+  let ix = 0, iz = 0;
+  // arrow keys turn/walk so the game is playable with no mouse at all
+  if (keys.ArrowLeft) P.yaw += dt * 1.9;
+  if (keys.ArrowRight) P.yaw -= dt * 1.9;
+  if (S.seated) return false;   // you can still look around; you just can't wander
+  if (keys.KeyW || keys.ArrowUp) iz -= 1;
+  if (keys.KeyS || keys.ArrowDown) iz += 1;
+  if (keys.KeyA) ix -= 1;
+  if (keys.KeyD) ix += 1;
+  if (isTouch) { ix += stickVec.x; iz += stickVec.y; }
+  const mag = Math.hypot(ix, iz);
+  if (mag > 1) { ix /= mag; iz /= mag; }
+
+  const sp = CFG.SPEED * ((keys.ShiftLeft || keys.ShiftRight) ? CFG.SPRINT : 1)
+    * (S.focus < 15 ? 0.72 : 1);
+  const fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw);
+  const rx = -fz, rz = fx;
+  const vx = (fx * -iz + rx * ix) * sp;
+  const vz = (fz * -iz + rz * ix) * sp;
+
+  const r = CFG.RADIUS;
+  let nx = P.pos.x + vx * dt;
+  if (!blocked(nx, P.pos.z, r)) P.pos.x = nx;
+  let nz = P.pos.z + vz * dt;
+  if (!blocked(P.pos.x, nz, r)) P.pos.z = nz;
+
+  P.pos.x = Math.max(0.4, Math.min(ROOM.x1 - 0.4, P.pos.x));
+  P.pos.z = Math.max(0.5, Math.min(ROOM.z1 - 0.4, P.pos.z));
+
+  const moving = mag > 0.05;
+  P.bob += dt * (moving ? 9.5 : 0);
+  return moving;
+}
+
+function blocked(x, z, r) {
+  for (const c of collide) {
+    if (x > c.x0 - r && x < c.x1 + r && z > c.z0 - r && z < c.z1 + r) return true;
+  }
+  return false;
+}
+
+let lastT = performance.now();
+function frame(now) {
+  requestAnimationFrame(frame);
+  let dt = (now - lastT) / 1000;
+  lastT = now;
+  dt = Math.min(dt, 0.05);
+  const t = now / 1000;
+
+  if (S.running && !S.over) {
+    S.min += dt * CFG.MIN_PER_SEC * (S.mode === 'play' ? 1 : 0.45);
+
+    // order prep
+    if (S.pending) {
+      S.pending.t -= dt;
+      if (S.pending.t <= 0) deliver();
+    }
+
+    // buffs
+    S.buffs.forEach(b => { if (b.t != null) b.t -= dt; });
+    S.buffs = S.buffs.filter(b => b.t == null || b.t > 0);
+
+    // caffeine + jitters
+    S.caf = Math.max(0, S.caf - CFG.CAF_DECAY * dt);
+    S.stats.peakCaf = Math.max(S.stats.peakCaf, S.caf);
+    if (S.caf > CFG.JITTER_AT) addBuff('jitters', 'THE JITTERS', null, true);
+    else dropBuff('jitters');
+
+    if (S.seated) {
+      const cafM = 0.5 + (S.caf / 100) * 1.5;
+      const focM = 0.55 + (S.focus / 100) * 0.75;
+      const jm = hasBuff('jitters') ? 0.72 : 1;
+      const mm = hasBuff('motiv') ? 1.4 : 1;
+      S.ship = Math.min(100, S.ship + CFG.SHIP_BASE * cafM * focM * jm * mm * dt);
+      const resist = 1 - S.caf / 260 - (hasBuff('protein') ? 0.35 : 0);
+      if (!hasBuff('locked')) S.focus = Math.max(0, S.focus - CFG.FOC_DRAIN * Math.max(0.3, resist) * dt);
+      if (S.focus <= 0 && !S._slumped) {
+        S._slumped = true;
+        toast('you are staring at the same line. <b>get up. get coffee.</b>');
+      }
+      if (S.focus > 6) S._slumped = false;
+      if (Math.random() < dt * 2.2) blip(1200 + Math.random() * 600, 0.012, 'square', 0.012);
+
+      S.eventT -= dt;
+      if (S.eventT <= 0) { fireEvent(); S.eventT = 17 + Math.random() * 15; }
+    } else {
+      S.focus = Math.min(100, S.focus + CFG.FOC_REGEN * dt);
+    }
+
+    // Trudy comes down partway through the night
+    S.trudyT -= dt * CFG.MIN_PER_SEC;
+    if (S.trudyT <= 0 && people.trudy.hidden) {
+      people.trudy.hidden = false;
+      people.trudy.label.visible = true;
+      toast('<b>a corgi has entered the cafe.</b> nobody is working now.');
+      blip(720, 0.1, 'triangle', 0.05);
+      setTimeout(() => blip(960, 0.12, 'triangle', 0.045), 110);
+      say(people.squirtle, 'BREAKING: she has returned. no comment from the family.', 6);
+      setTimeout(() => say(people.nico, 'she is not supposed to be down here.', 5), 2600);
+    }
+
+    // sunrise ramp over the last 55 minutes
+    const dawnT = Math.max(0, Math.min(1, (S.min - (CFG.END_MIN - 55)) / 55));
+    world.setDawn(dawnT);
+    world.setClock(S.min);
+    scene.background.setHSL(0.62 - dawnT * 0.55, 0.5, 0.05 + dawnT * 0.35);
+
+    if (S.ship >= 100) endGame(true);
+    else if (S.min >= CFG.END_MIN) endGame(false);
+  }
+
+  if (S.running && S.mode === 'play') {
+    const moving = S.seated ? false : move(dt);
+    if (moving && Math.random() < dt * 3.4) blip(90 + Math.random() * 30, 0.03, 'sine', 0.02);
+  }
+
+  // camera
+  const jitterAmp = hasBuff('jitters') ? 0.012 : 0;
+  P.sway += dt * 14;
+  camera.position.set(
+    P.pos.x + Math.sin(P.sway) * jitterAmp,
+    (S.seated ? 1.22 : CFG.EYE) + Math.sin(P.bob) * 0.035 + Math.cos(P.sway * 1.7) * jitterAmp,
+    P.pos.z + Math.cos(P.sway * 0.9) * jitterAmp
+  );
+  camera.rotation.set(0, 0, 0);
+  camera.rotateY(P.yaw);
+  camera.rotateX(P.pitch);
+
+  animatePeople(people, dt, t, P.pos);
+  world.tickAir(dt, t);
+
+  // face NPC labels + bubbles toward the player (sprites already billboard)
+  if (S.running && S.mode === 'play') {
+    curTarget = bestTarget();
+    if (curTarget) {
+      promptEl.style.display = 'block';
+      promptEl.innerHTML = `<b>[${isTouch ? 'E' : 'E'}]</b> ${curTarget.label}`;
+    } else promptEl.style.display = 'none';
+  } else if (S.mode !== 'play') {
+    promptEl.style.display = 'none';
+  }
+
+  if (S.running) updateHUD();
+  renderer.render(scene, camera);
+}
+requestAnimationFrame(frame);
+
+/* --------------------------------------------------------- start/end -- */
+function startGame() {
+  el('title').classList.remove('on');
+  el('end').classList.remove('on');
+  S.running = true; S.over = false; S.mode = 'play';
+  initAudio();
+  if (AC && AC.state === 'suspended') AC.resume();
+  if (!isTouch) renderer.domElement.requestPointerLock();
+  toast('2:47 AM. the machine is hot. <b>go.</b>', 3400);
+}
+el('startbtn').onclick = startGame;
+
+function endGame(won) {
+  S.over = true; S.running = false; S.mode = 'end';
+  document.exitPointerLock?.();
+  ach(won ? 'SHIPPED' : 'SAW THE SUNRISE');
+
+  const f = el('flash');
+  f.style.transition = 'opacity .1s'; f.style.opacity = won ? '.85' : '.5';
+  setTimeout(() => { f.style.transition = 'opacity 1.1s'; f.style.opacity = '0'; }, 110);
+
+  el('endtitle').textContent = won ? 'SHIPPED' : 'THE SUN CAME UP';
+  el('endtitle').style.color = won ? '#ff7b3d' : '#8fb8ff';
+  el('verdict').textContent = won
+    ? 'You shipped at ' + fmtClock(S.min).replace(/<[^>]+>/g, '') + '. You have escaped the permanent underclass. For roughly one business day.'
+    : 'It is 6:00 AM. You are ' + S.ship.toFixed(0) + '% of the way there and the light is coming through the windows. The cafe does not close. That is the problem.';
+
+  const st = [
+    ['SHIPPED', S.ship.toFixed(0) + '%'],
+    ['TIME', fmtClock(CFG.START_MIN).replace(/<[^>]+>/g, '') + ' → ' + fmtClock(S.min).replace(/<[^>]+>/g, '')],
+    ['DRINKS', S.stats.drinks],
+    ['SNACKS', S.stats.food],
+    ['SPENT', '$' + S.stats.spent.toFixed(2)],
+    ['PEAK CAFFEINE', Math.round(S.stats.peakCaf)],
+    ['PEOPLE MET', S.stats.met.size],
+    ['PUSHUPS', S.stats.pushups || 0],
+    ['NEW FOLLOWERS', S.stats.followers],
+    ['CORGIS SEEN', S.ach.has('PET THE DOG') ? 1 : 0],
+  ];
+  el('statlist').innerHTML = st.map(([k, v]) => `<div class="stat"><span>${k}</span><b>${v}</b></div>`).join('');
+  el('achv').innerHTML = [...S.ach].map(a => `<span class="ach">${a}</span>`).join('');
+  el('end').classList.add('on');
+}
+
+function shareText() {
+  const lines = [
+    `CORGI CAFE SIMULATOR — 9 Claude Ln, 2:47AM shift`,
+    ``,
+    `shipped: ${S.ship.toFixed(0)}%`,
+    `clocked out: ${fmtClock(S.min).replace(/<[^>]+>/g, '')}`,
+    `drinks: ${S.stats.drinks}  ·  spent: $${S.stats.spent.toFixed(2)}`,
+    `peak caffeine: ${Math.round(S.stats.peakCaf)}  ·  pushups: ${S.stats.pushups || 0}`,
+    `corgis seen: ${S.ach.has('PET THE DOG') ? 1 : 0}`,
+    ``,
+    S.ach.has('SHIPPED') ? 'escaped the permanent underclass (1 business day)' : 'the sun came up. it was not enough.',
+  ];
+  return lines.join('\n');
+}
+el('sharebtn').onclick = () => {
+  const url = location.href.split('?')[0];
+  const txt = encodeURIComponent(shareText() + '\n\n');
+  open(`https://x.com/intent/post?text=${txt}&url=${encodeURIComponent(url)}`, '_blank');
+};
+el('copybtn').onclick = () => {
+  navigator.clipboard?.writeText(shareText() + '\n' + location.href.split('?')[0]);
+  toast('copied.');
+};
+el('againbtn').onclick = () => location.reload();
+
+// expose a little state for debugging in the console
+window.CCS = {
+  S, P, world, people, CFG, renderer, scene, camera, startGame, toast,
+  act: onAction,
+  target: () => (curTarget = bestTarget()),
+};
