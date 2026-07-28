@@ -47,9 +47,9 @@ app.appendChild(renderer.domElement);
 // nearest-neighbour, which is what gives everything its chunky pixel edges.
 const PIXEL_HEIGHT = 328;
 function sizeRenderer() {
-  const aspect = innerWidth / Math.max(1, innerHeight);
+  const aspect = Math.max(0.4, innerWidth / Math.max(1, innerHeight));
   const h = PIXEL_HEIGHT;
-  const w = Math.round(h * aspect);
+  const w = Math.max(160, Math.round(h * aspect));
   renderer.setSize(w, h, false);      // false: leave the CSS size alone
   camera.aspect = aspect;
   camera.updateProjectionMatrix();
@@ -779,6 +779,9 @@ function blocked(x, z, r) {
 let lastT = performance.now();
 function frame(now) {
   requestAnimationFrame(frame);
+  step(now);
+}
+function step(now) {
   let dt = (now - lastT) / 1000;
   lastT = now;
   dt = Math.min(dt, 0.05);
@@ -956,4 +959,5 @@ window.CCS = {
   S, P, world, people, CFG, renderer, scene, camera, startGame, toast,
   act: onAction,
   target: () => (curTarget = bestTarget()),
+  step,
 };
