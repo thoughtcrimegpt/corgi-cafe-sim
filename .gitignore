@@ -1,2 +1,26 @@
+# Local tooling — these contain absolute user paths. Never commit.
+.claude/
+launch.json
+*.code-workspace
+
+# Node
 node_modules/
+npm-debug.log*
+*.log
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*~
+
+# OS metadata
 .DS_Store
+Thumbs.db
+desktop.ini
+
+# Local scratch / staging copies
+*.local.html
+*.local.*
+tmp/
+scratch/
