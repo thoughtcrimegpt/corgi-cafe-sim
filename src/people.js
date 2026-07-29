@@ -1,7 +1,7 @@
 // NPCs: meshes, idle animation, patrols, and everything they say.
 // Labels and speech bubbles are DATA here — main.js draws them as a crisp DOM
 // overlay at full resolution, outside the pixelated 3D buffer.
-import * as THREE from '../vendor/three.module.min.js?v=5';
+import * as THREE from '../vendor/three.module.min.js?v=6';
 
 const SKINS = [0xe8c39e, 0xc98d63, 0x8d5a3b, 0xf0d3b4, 0x6f4429, 0xd9a97c];
 const TOPS = [0x2f3238, 0x1f4d6b, 0x6b2f3a, 0x3b5c40, 0xd8d2c8, 0x4a3f66, 0x8a4a2b];
@@ -294,6 +294,7 @@ export const DIALOGUE = {
     },
     repeat: [
       ["still here."],
+      ["trudy's roaming around here somewhere, i think. she's not supposed to be. don't tell her i said that."],
       ["the machine's hot. it's always hot."],
       ["people keep arguing about whether the grind is exaggerated. it's 3am and every seat is taken. that's not a vibe, that's data."],
       ["someone posted that corgi legs were 'net inferior'. banned. nothing personal — structural."],
