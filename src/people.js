@@ -1,7 +1,7 @@
 // NPCs: meshes, idle animation, patrols, and everything they say.
 // Labels and speech bubbles are DATA here — main.js draws them as a crisp DOM
 // overlay at full resolution, outside the pixelated 3D buffer.
-import * as THREE from '../vendor/three.module.min.js?v=7';
+import * as THREE from '../vendor/three.module.min.js?v=8';
 
 const SKINS = [0xe8c39e, 0xc98d63, 0x8d5a3b, 0xf0d3b4, 0x6f4429, 0xd9a97c];
 const TOPS = [0x2f3238, 0x1f4d6b, 0x6b2f3a, 0x3b5c40, 0xd8d2c8, 0x4a3f66, 0x8a4a2b];
@@ -297,6 +297,8 @@ export const DIALOGUE = {
       ["trudy's roaming around here somewhere, i think. she's not supposed to be. don't tell her i said that."],
       ["the machine's hot. it's always hot."],
       ["people keep arguing about whether the grind is exaggerated. it's 3am and every seat is taken. that's not a vibe, that's data."],
+      ["a cafe that's only full at 3am is adverse selection with an espresso machine. i know exactly who walks in here. that's the point."],
+      ["legacy carriers would look at this room and see uninsurable sleep schedules. i look at this room and see fourteen-hour focus blocks. same data. better read."],
       ["someone posted that corgi legs were 'net inferior'. banned. nothing personal — structural."],
       ["i sleep upstairs. mattress on the floor. shortest commute in the city."],
       ["if you're here at 4am you're building something. that's the whole membership test, and you passed."],
@@ -377,6 +379,8 @@ export const DIALOGUE = {
       ["BREAKING: sources close to the dog upstairs say she has not been seen in weeks. the family has no comment."],
       ["BREAKING: cafe announces it will close for one hour. cafe immediately denies this. cafe has never closed."],
       ["BREAKING: the corgis in the residency paintings have achieved flight. officials say this was always the plan. developing."],
+      ["BREAKING: man files insurance claim for 'lost focus'. claim approved in ninety seconds. man reports feeling seen for the first time."],
+      ["actuarial tables are just astrology that went to columbia."],
       ["the timeline is a slot machine that pays out in identity."],
       ["everyone's trying to escape the permanent underclass and nobody's asked what class means when the economy is a language model."],
       ["vibecamp changed me. i can't explain it. that part's load-bearing."],
@@ -395,16 +399,41 @@ export const DIALOGUE = {
       "you're pre-seed? perfect. that is precisely our ICP.",
     ],
     choice: {
-      prompt: "give me fifteen minutes and i'll never bother you again. (i will bother you again.)",
+      prompt: "ninety seconds. two questions. i quote you right here at the table.",
       options: [
-        { label: 'TAKE THE 15', tag: 'take' },
+        { label: 'GET A QUOTE', tag: 'quote' },
         { label: "I'M HEADS DOWN", tag: 'no' },
       ],
     },
+    // the underwriting questionnaire. answers carry a risk load in dollars.
+    quiz: [
+      {
+        prompt: 'question one. hours of sleep last night?',
+        options: [
+          { label: 'EIGHT', tag: 'q1a', load: 0 },
+          { label: 'FOUR', tag: 'q1b', load: 1.5 },
+          { label: 'DEFINE NIGHT', tag: 'q1c', load: 3 },
+        ],
+      },
+      {
+        prompt: 'question two. how many months of runway?',
+        options: [
+          { label: 'EIGHTEEN', tag: 'q2a', load: 0 },
+          { label: 'SIX-ISH', tag: 'q2b', load: 1.5 },
+          { label: 'RUNWAY IS A MINDSET', tag: 'q2c', load: 3 },
+        ],
+      },
+    ],
     after: {
-      take: [
-        "signed. covered. you can now fail in a fully insured manner.",
-        "i'm putting a drink on the house on your tab. don't tell nico. nico knows.",
+      bound: [
+        "bound. you're covered. next three bad things that happen tonight, we pay out.",
+        "claims go through in about ninety seconds. you won't even stop typing.",
+      ],
+      declined: [
+        "totally fair. the quote's good all night. it will be different, but it'll be good.",
+      ],
+      broke: [
+        "so the card didn't go through, which — honestly, that's exactly the risk profile i priced. respect.",
       ],
       no: [
         "love that. respect the focus. i'll follow up thursday.",
@@ -417,6 +446,11 @@ export const DIALOGUE = {
       ["i closed two founders between 1 and 3am. the graveyard shift converts."],
       ["you look like you're about to say 'send me a deck'. send me a deck."],
       ["my quota resets at midnight. so does the cafe. we understand each other."],
+    ],
+    claimLines: [
+      'claim approved. 87 seconds. you can keep typing.',
+      'approved. 91 seconds. legacy carriers are still finding a pen.',
+      'that one\'s covered. always was.',
     ],
   },
 
@@ -448,6 +482,7 @@ export const DIALOGUE = {
       ["everyone in here has a github and a sleep debt. that's a market."],
       ["is the founder here? the one who sleeps upstairs? no reason."],
       ["i'd do a small check. small for me. life-changing for you. isn't that beautiful."],
+      ["an insurance company that opens a cafe to watch founders work. do you understand how good that underwriting data is. i'm not even mad. i'm taking notes."],
     ],
   },
 

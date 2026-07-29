@@ -1,9 +1,9 @@
 // CORGI CAFE SIMULATOR — 9 Claude Ln, 24/7.
 // Unofficial fan parody. Menu prices are real; everything else is a joke.
-import * as THREE from '../vendor/three.module.min.js?v=7';
-import { buildCafe, ROOM } from './world.js?v=7';
-import { buildPeople, animatePeople, DIALOGUE, say } from './people.js?v=7';
-import { MENU, ADDONS, priceOf, rollHelloWorld } from './menu.js?v=7';
+import * as THREE from '../vendor/three.module.min.js?v=8';
+import { buildCafe, ROOM } from './world.js?v=8';
+import { buildPeople, animatePeople, DIALOGUE, say } from './people.js?v=8';
+import { MENU, ADDONS, priceOf, rollHelloWorld } from './menu.js?v=8';
 
 const CFG = {
   MIN_PER_SEC: 0.85,      // in-game minutes per real second
@@ -26,6 +26,7 @@ const S = {
   ship: 0, focus: 70, caf: 0, cash: 40,
   seated: null, mode: 'play',        // play | dialogue | order | celebrate | end
   celebrate: false, confetti: null, confettiT: 0,
+  policy: null,                       // {premium, claimsLeft, claims, paidOut}
   buffs: [],                          // {id,name,t,bad}
   ach: new Set(),
   stats: { drinks: 0, food: 0, spent: 0, peakCaf: 0, met: new Set(), followers: 0, sets: 0, pushups: 0, receipt: [] },
@@ -871,18 +872,8 @@ function resolveChoice(n, tag) {
     return;
   }
   if (n.id === 'gtm') {
-    if (tag === 'take') {
-      ach('FULLY INSURED');
-      n.choiceDone = true;
-      S.min += 10;
-      addBuff('covered', 'COVERED', null);
-      S.cash += 6;
-      toast('you are insured. <b>one bad thing will bounce off you.</b>');
-      setTimeout(() => openDialogue(n, d.after.take), 260);
-    } else {
-      n.followUp = true;
-      setTimeout(() => openDialogue(n, d.after.no), 260);
-    }
+    if (tag === 'quote') runQuote(n, d);
+    else setTimeout(() => openDialogue(n, d.after.no), 260);
     return;
   }
   if (n.id === 'vc') {
@@ -902,6 +893,93 @@ function resolveChoice(n, tag) {
   }
 }
 
+/* --------------------------------------------------------- the policy -- */
+// The quote is underwritten off your actual state: caffeine is a surcharge,
+// steady focus is a credit, and your questionnaire answers carry risk loads.
+function quotePremium(loads) {
+  let p = 6;
+  p += S.caf * 0.05;                       // wired is a risk class
+  if (hasBuff('jitters')) p += 2;
+  if (S.focus > 70) p -= 1;                // demonstrated stability credit
+  p += loads;
+  p = Math.max(5, Math.min(16, p));
+  return Math.round(p * 10) / 10 + 0.4;    // everything ends in .40. house style.
+}
+
+function runQuote(n, d) {
+  let loads = 0;
+  const ask = (qi) => {
+    if (qi < d.quiz.length) {
+      const q = d.quiz[qi];
+      openDialogue(n, [], {
+        prompt: q.prompt,
+        options: q.options.map(o => ({ label: o.label, tag: o.tag })),
+      }, tag => {
+        const opt = q.options.find(o => o.tag === tag);
+        loads += opt ? opt.load : 0;
+        setTimeout(() => ask(qi + 1), 240);
+      });
+      return;
+    }
+    // underwriting complete — present the number with its itemized logic
+    const prem = quotePremium(loads);
+    const parts = [];
+    if (S.caf > 40) parts.push('caffeine surcharge');
+    if (hasBuff('jitters')) parts.push('jitters rider');
+    if (S.focus > 70) parts.push('stability credit');
+    const why = parts.length ? ` (${parts.join(', ')})` : '';
+    openDialogue(n, [
+      `ok. the model likes you more than it should. $${prem.toFixed(2)} for the night${why}.`,
+      'covers the next three bad things that happen to you. claims pay out in about ninety seconds.',
+    ], {
+      prompt: `$${prem.toFixed(2)}. one night. three claims. yes or no.`,
+      options: [
+        { label: `BIND IT — $${prem.toFixed(2)}`, tag: 'bind' },
+        { label: 'DECLINE THE QUOTE', tag: 'pass' },
+      ],
+    }, tag => {
+      if (tag !== 'bind') {
+        setTimeout(() => openDialogue(n, d.after.declined), 240);
+        return;
+      }
+      if (prem > S.cash) {
+        setTimeout(() => openDialogue(n, d.after.broke), 240);
+        return;
+      }
+      S.cash -= prem;
+      S.stats.spent += prem;
+      S.policy = { premium: prem, claimsLeft: 3, claims: 0, paidOut: 0 };
+      S.stats.receipt.push({ n: 'Founder policy · 1 night', p: prem, q: 1 });
+      n.choiceDone = true;
+      ach('FULLY INSURED');
+      addBuff('policy', 'INSURED ×3', null);
+      toast(`bound. <b>$${prem.toFixed(2)}</b>. the next three bad things are corgi's problem.`);
+      blip(660, 0.08, 'triangle', 0.05);
+      setTimeout(() => openDialogue(n, d.after.bound), 260);
+    });
+  };
+  ask(0);
+}
+
+function fileClaim(e) {
+  // the bad thing still happens on screen — then the payout lands
+  S.policy.claimsLeft--;
+  S.policy.claims++;
+  if (!S.policy.claimsLeft) dropBuff('policy');
+  else { dropBuff('policy'); addBuff('policy', 'INSURED ×' + S.policy.claimsLeft, null); }
+  const secs = 84 + (Math.random() * 14 | 0);
+  const restored = [];
+  if (e.foc) { S.focus = Math.min(100, S.focus - e.foc); restored.push('focus restored'); }
+  if (e.min) { S.min -= e.min; restored.push(e.min + ' minutes back'); }
+  S.policy.paidOut += (e.foc ? -e.foc * 0.4 : 0) + (e.min ? e.min * 1.2 : 0);
+  toast(`<b>CLAIM APPROVED</b> in ${secs}s — ${restored.join(', ') || 'made whole'}.`);
+  const agent = people.gtm[(Math.random() * people.gtm.length) | 0];
+  const lines = DIALOGUE.gtm.claimLines;
+  say(agent, lines[(Math.random() * lines.length) | 0], 4);
+  blip(880, 0.07, 'triangle', 0.04);
+  if (S.policy.claims >= 3) ach('LOSS RATIO');
+}
+
 /* ------------------------------------------------------------ events -- */
 const EVENTS = [
   { bad: true, t: 'your cofounder: "quick call?" it is never quick.', foc: -9 },
@@ -915,11 +993,15 @@ const EVENTS = [
 
 function fireEvent() {
   const roll = Math.random();
-  // people-driven interrupts
-  if (roll < 0.34 && !hasBuff('shield') && !hasBuff('covered')) {
+  // people-driven interrupts — policyholders get a drive-by instead of a pitch
+  if (roll < 0.34 && !hasBuff('shield')) {
     const who = Math.random() < 0.55
       ? people.gtm[(Math.random() * people.gtm.length) | 0]
       : people.vc;
+    if (who.id === 'gtm' && S.policy) {
+      say(who, 'just checking on a valued policyholder. carry on.', 4);
+      return;
+    }
     who.approach = new THREE.Vector2(P.pos.x, P.pos.z);
     setTimeout(() => { who.approach = null; }, 14000);
     say(who, who.id === 'vc' ? 'hey — quick question.' : 'hi! sorry — one quick thing.', 4);
@@ -927,9 +1009,9 @@ function fireEvent() {
     return;
   }
   const e = EVENTS[(Math.random() * EVENTS.length) | 0];
-  if (e.bad && (hasBuff('shield') || hasBuff('covered'))) {
-    dropBuff(hasBuff('shield') ? 'shield' : 'covered');
-    toast('something bad tried to happen. you were covered.');
+  if (e.bad && hasBuff('shield')) {
+    dropBuff('shield');
+    toast('something bad tried to happen. SECUR-I-TEA blocked it outright.');
     return;
   }
   if (e.foc) S.focus = Math.max(0, Math.min(100, S.focus + e.foc));
@@ -937,6 +1019,10 @@ function fireEvent() {
   if (e.min) S.min += e.min;
   toast(e.t);
   if (e.bad) blip(180, 0.12, 'sawtooth', 0.035);
+  // the shield PREVENTS; the policy REIMBURSES. different products. ask nico.
+  if (e.bad && S.policy && S.policy.claimsLeft > 0) {
+    setTimeout(() => fileClaim(e), 1400);
+  }
 }
 
 /* -------------------------------------------------------------- loop -- */
@@ -1218,7 +1304,13 @@ function receiptHTML(won) {
   if (S.ach.has('GNOSIS')) free.push('GNOSIS ×1');
   if (S.ach.has('PET THE DOG')) free.push('DOG ×1');
   if (S.stats.followers) free.push(`FOLLOWERS +${S.stats.followers}`);
-  if (S.ach.has('FULLY INSURED')) free.push('INSURANCE (bounced one interrupt)');
+
+  const policyRows = S.policy ? `
+    <div class="rtear"></div>
+    <div class="rrow"><span>CLAIMS FILED</span><i></i><b>${S.policy.claims}</b></div>
+    <div class="rrow"><span>PAID OUT</span><i></i><b>$${S.policy.paidOut.toFixed(2)}</b></div>
+    <div class="rrow"><span>LOSS RATIO</span><i></i><b>${S.policy.premium > 0 ? Math.round(S.policy.paidOut / S.policy.premium * 100) : 0}%</b></div>
+    ${S.policy.paidOut > S.policy.premium ? '<div class="rfree">we lost money on you. we\'d bind you again.</div>' : ''}` : '';
 
   return `
   <div class="receipt">
@@ -1233,6 +1325,7 @@ function receiptHTML(won) {
     <div class="rtear"></div>
     <div class="rrow rtotal"><span>TOTAL</span><i></i><b>$${S.stats.spent.toFixed(2)}</b></div>
     ${free.length ? `<div class="rfree">NO CHARGE:<br>${free.join('<br>')}</div>` : ''}
+    ${policyRows}
     <div class="rtear"></div>
     <div class="rrow rship"><span>SHIPPED</span><i></i><b>${S.ship.toFixed(0)}%</b></div>
     <div class="rstatus">${won
@@ -1301,5 +1394,5 @@ window.CCS = {
   S, P, world, people, CFG, renderer, scene, camera, startGame, toast,
   act: onAction,
   target: () => (curTarget = bestTarget()),
-  step,
+  step, fireEvent,
 };
