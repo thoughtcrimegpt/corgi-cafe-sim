@@ -1,10 +1,11 @@
 // CORGI CAFE SIMULATOR — 9 Claude Ln, 24/7.
 // Unofficial fan parody. Menu prices are real; everything else is a joke.
-import * as THREE from '../vendor/three.module.min.js?v=13';
-import { drawCorgi } from './textures.js?v=13';
-import { buildCafe, ROOM } from './world.js?v=13';
-import { buildPeople, animatePeople, DIALOGUE, say } from './people.js?v=13';
-import { MENU, ADDONS, priceOf, rollHelloWorld } from './menu.js?v=13';
+import * as THREE from '../vendor/three.module.min.js?v=14';
+import { drawCorgi } from './textures.js?v=14';
+import { PHRASES, HANDLE_RE, fetchNotes, pinNote } from './wall.js?v=14';
+import { buildCafe, ROOM } from './world.js?v=14';
+import { buildPeople, animatePeople, DIALOGUE, say } from './people.js?v=14';
+import { MENU, ADDONS, priceOf, rollHelloWorld } from './menu.js?v=14';
 
 const CFG = {
   MIN_PER_SEC: 0.85,      // in-game minutes per real second
@@ -99,6 +100,7 @@ addEventListener('keydown', e => {
   if (codes.includes('KeyE') || e.code === 'Space') { e.preventDefault(); onAction(); }
   if (codes.includes('KeyM')) toggleAudio();
   if (e.code === 'Escape' && S.mode === 'order') closeOrder();
+  if (e.code === 'Escape' && S.mode === 'wall') closeWall();
 });
 addEventListener('keyup', e => { for (const c of keyCodes(e)) keys[c] = false; });
 // a stuck key across a focus change is worse than a dropped one
@@ -748,6 +750,8 @@ function interactables() {
 
   // poster
   if (near(8.6, 1.1, 2.0)) list.push({ kind: 'poster', label: 'READ THE POSTER', x: 8.6, z: 0.6 });
+  // the wall by the door
+  if (near(1.3, 2.6, 2.1)) list.push({ kind: 'wall', label: 'READ THE WALL', x: 0.3, z: 2.55 });
 
   return list;
 }
@@ -803,6 +807,7 @@ function onAction() {
     ]);
     return;
   }
+  if (t.kind === 'wall') { openWall(); return; }
   if (t.kind === 'npc') { talkTo(t.npc); return; }
 }
 
@@ -941,6 +946,104 @@ function resolveChoice(n, tag) {
     }
   }
 }
+
+/* ---------------------------------------------------------- the wall -- */
+let wallCache = null, wallLoadedAt = 0;
+
+function noteStat(n) {
+  const t = fmtClock(n.tmin).replace(/<[^>]+>/g, '');
+  return `shipped ${n.ship}%${n.won ? '' : ' · sun came up'} · out ${t}` +
+    (n.claims ? ` · ${n.claims} claims` : '') + ` · shift #${n.shift}`;
+}
+
+async function loadWall(force) {
+  if (!force && wallCache && Date.now() - wallLoadedAt < 60000) return wallCache;
+  try {
+    wallCache = await fetchNotes();
+    wallLoadedAt = Date.now();
+    world.drawWall(wallCache.map(n => ({
+      h: n.handle, p: PHRASES[n.phrase] ?? '…', stat: noteStat(n),
+    })));
+  } catch {
+    wallCache = wallCache || null;
+  }
+  return wallCache;
+}
+
+function openWall() {
+  S.mode = 'wall';
+  document.exitPointerLock?.();
+  const list = el('walllist');
+  list.innerHTML = '<div class="wempty">reading the wall…</div>';
+  el('wallp').classList.add('on');
+  loadWall(true).then(notes => {
+    if (S.mode !== 'wall') return;
+    if (!notes || !notes.length) {
+      list.innerHTML = '<div class="wempty">the wall is quiet tonight. finish a shift and be the first.</div>';
+      return;
+    }
+    list.innerHTML = notes.map(n =>
+      `<div class="wnote"><span class="wh">@${n.handle}</span>` +
+      `<div class="wp">“${PHRASES[n.phrase] ?? '…'}”</div>` +
+      `<div class="ws">${noteStat(n)}</div></div>`
+    ).join('');
+  });
+}
+function closeWall() {
+  el('wallp').classList.remove('on');
+  if (!S.over) S.mode = 'play';
+}
+el('wallclose').onclick = closeWall;
+
+/* pin form on the end screen */
+function setupPinbox() {
+  const sel = el('pinphrase');
+  if (!sel.options.length) {
+    PHRASES.forEach((p, i) => {
+      const o = document.createElement('option');
+      o.value = i; o.textContent = p;
+      sel.appendChild(o);
+    });
+    sel.selectedIndex = (Math.random() * PHRASES.length) | 0;
+    try { el('pinhandle').value = localStorage.getItem('ccs_handle') || ''; } catch {}
+  }
+  el('pinbtn').disabled = false;
+  el('pinbtn').textContent = 'PIN TO THE WALL';
+  el('pinstatus').textContent = '';
+}
+
+el('pinbtn').onclick = async () => {
+  const raw = el('pinhandle').value.trim().replace(/^@/, '');
+  if (!HANDLE_RE.test(raw)) {
+    el('pinstatus').textContent = 'handle: letters, numbers, _ (max 15)';
+    return;
+  }
+  let last = 0;
+  try { last = +localStorage.getItem('ccs_lastpin') || 0; } catch {}
+  if (Date.now() - last < 60000) {
+    el('pinstatus').textContent = 'one pin a minute. the wall is patient.';
+    return;
+  }
+  el('pinbtn').disabled = true;
+  el('pinstatus').textContent = 'pinning…';
+  try {
+    await pinNote({
+      handle: raw, phrase: +el('pinphrase').value,
+      ship: S.ship, tmin: Math.min(360, S.min), shift: shiftNumber(),
+      won: !!S.lastWon, claims: S.policy ? S.policy.claims : 0,
+    });
+    try {
+      localStorage.setItem('ccs_handle', raw);
+      localStorage.setItem('ccs_lastpin', String(Date.now()));
+    } catch {}
+    el('pinbtn').textContent = 'PINNED ✓';
+    el('pinstatus').textContent = 'it\'s on the board by the door.';
+    loadWall(true);
+  } catch {
+    el('pinbtn').disabled = false;
+    el('pinstatus').textContent = 'the wall isn\'t taking pins right now.';
+  }
+};
 
 /* ------------------------------------------------------- the terminal -- */
 // The night's work, visible. Commits land faster the more caffeinated you are.
@@ -1508,6 +1611,7 @@ function startGame() {
   initAudio();
   if (AC && AC.state === 'suspended') AC.resume();
   startMusic();
+  loadWall();   // warm the board by the door
   if (!isTouch) renderer.domElement.requestPointerLock();
   toast('2:47 AM. the machine is hot. <b>go.</b>', 3400);
 }
@@ -1649,6 +1753,7 @@ function endGame(won) {
     el('endtitle').style.color = won ? '#ff7b3d' : '#8fb8ff';
     el('receiptwrap').innerHTML = receiptHTML(won);
     el('achv').innerHTML = [...S.ach].map(a => `<span class="ach">${a}</span>`).join('');
+    setupPinbox();
     el('end').classList.add('on');
   };
 

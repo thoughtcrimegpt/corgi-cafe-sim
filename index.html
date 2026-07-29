@@ -202,6 +202,29 @@
   .rbarcode{height:34px;margin:14px 8px 6px;
     background:repeating-linear-gradient(90deg,#2b241e 0 2px,#0000 2px 5px,#2b241e 5px 6px,#0000 6px 10px,#2b241e 10px 13px,#0000 13px 15px);}
   .rfoot{text-align:center;font-size:10.5px;letter-spacing:1.6px;opacity:.7;margin-top:6px;}
+
+  /* ---------------------------------------------------------- the wall --- */
+  #walllist{padding:4px 20px 6px;max-height:56vh;overflow:auto;display:flex;
+    flex-direction:column;gap:9px;}
+  .wnote{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);
+    border-radius:11px;padding:11px 15px;}
+  .wnote .wh{color:var(--o2);font-weight:800;font-size:13.5px;letter-spacing:.4px;}
+  .wnote .wp{font-size:15px;margin:5px 0 6px;line-height:1.45;}
+  .wnote .ws{font-size:11.5px;opacity:.5;font-family:ui-monospace,Consolas,monospace;
+    letter-spacing:.6px;}
+  .wempty{opacity:.55;font-size:14px;text-align:center;padding:26px 0;}
+
+  /* pin form on the end screen */
+  #pinbox{margin:0 24px 18px;padding:13px 15px;background:rgba(255,255,255,.05);
+    border:1px solid rgba(255,255,255,.1);border-radius:12px;}
+  .pinrow{display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;}
+  .pinrow + .pinrow{margin-top:9px;}
+  #pinhandle{background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.16);color:var(--cream);
+    border-radius:9px;padding:9px 12px;font:inherit;font-size:13.5px;width:150px;}
+  #pinhandle:focus{outline:none;border-color:var(--o2);}
+  #pinphrase{background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.16);color:var(--cream);
+    border-radius:9px;padding:9px 10px;font:inherit;font-size:13px;max-width:280px;}
+  #pinstatus{font-size:12px;opacity:.75;}
   #achv{margin:0 24px 20px;display:flex;gap:6px;flex-wrap:wrap;justify-content:center;}
   .ach{background:rgba(232,85,47,.16);border:1px solid rgba(232,85,47,.5);border-radius:20px;
     padding:5px 11px;font-size:11px;letter-spacing:.6px;}
@@ -294,9 +317,27 @@
   </p>
 </div></div>
 
+<div class="panel" id="wallp"><div class="card">
+  <h2>THE WALL · LEAVE PROOF</h2>
+  <div id="walllist"></div>
+  <div style="display:flex;justify-content:flex-end;padding:12px 20px 18px">
+    <button class="btn ghost" id="wallclose">CLOSE</button>
+  </div>
+</div></div>
+
 <div class="panel" id="end"><div class="card">
   <div class="bigtitle" id="endtitle">SHIPPED</div>
   <div id="receiptwrap"></div>
+  <div id="pinbox">
+    <div class="pinrow">
+      <input id="pinhandle" maxlength="16" placeholder="@yourhandle" autocomplete="off" spellcheck="false">
+      <select id="pinphrase"></select>
+    </div>
+    <div class="pinrow">
+      <button class="btn" id="pinbtn">PIN TO THE WALL</button>
+      <span id="pinstatus"></span>
+    </div>
+  </div>
   <div id="achv"></div>
   <div style="display:flex;gap:9px;justify-content:center;flex-wrap:wrap;margin:0 20px">
     <button class="btn" id="sharebtn">POST ON X</button>
@@ -308,7 +349,7 @@
 
 <div class="flash" id="flash"></div>
 
-<script type="module" src="./src/main.js?v=13"></script>
+<script type="module" src="./src/main.js?v=14"></script>
 <script>
 // analytics — only on the deployed site, so local dev never counts itself
 if (location.hostname.endsWith("github.io")) {

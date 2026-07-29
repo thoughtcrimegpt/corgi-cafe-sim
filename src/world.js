@@ -1,6 +1,6 @@
 // The cafe itself: geometry, colliders, seats, props.
-import * as THREE from '../vendor/three.module.min.js?v=13';
-import * as T from './textures.js?v=13';
+import * as THREE from '../vendor/three.module.min.js?v=14';
+import * as T from './textures.js?v=14';
 
 export const ROOM = { x0: 0, x1: 25, z0: 0, z1: 10.5, h: 3.5 };
 
@@ -326,6 +326,86 @@ export function buildCafe(scene) {
   tagline.rotation.y = -Math.PI / 2;
   tagline.position.set(24.83, 2.3, 4.6);
   root.add(tagline);
+
+  /* ---- THE WALL: a cork board by the door where players leave proof ---- */
+  const wallCanvas = document.createElement('canvas');
+  wallCanvas.width = 1024; wallCanvas.height = 704;
+  const wallTex = new THREE.CanvasTexture(wallCanvas);
+  wallTex.colorSpace = THREE.SRGBColorSpace;
+  wallTex.magFilter = THREE.NearestFilter;
+  const wallBoard = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.95, 1.34),
+    new THREE.MeshBasicMaterial({ map: wallTex, color: 0xcccccc })
+  );
+  wallBoard.rotation.y = Math.PI / 2;
+  wallBoard.position.set(0.18, 1.72, 2.55);
+  root.add(wallBoard);
+  box(0.06, 1.46, 2.08, mat('wallframe', { color: 0x5c4630 }), 0.13, 1.72, 2.55);
+  const wallSpot = new THREE.PointLight(0xffe0b8, 0.8, 4.5, 2);
+  wallSpot.position.set(1.3, 2.6, 2.55);
+  scene.add(wallSpot);
+
+  // items: [{h, p, stat}] — all strings prepared by the caller
+  function drawWall(items) {
+    const g = wallCanvas.getContext('2d');
+    g.fillStyle = '#9c7a52'; g.fillRect(0, 0, 1024, 704);
+    // cork speckle
+    g.globalAlpha = 0.14; g.fillStyle = '#6b532f';
+    for (let i = 0; i < 400; i++) g.fillRect(Math.random() * 1024, Math.random() * 704, 4, 3);
+    g.globalAlpha = 1;
+    g.fillStyle = '#2e2620';
+    g.fillRect(0, 0, 1024, 86);
+    g.fillStyle = '#f4e8d8';
+    g.textAlign = 'center';
+    g.font = 'bold 46px Helvetica, Arial, sans-serif';
+    g.fillText('THE WALL', 512, 44);
+    g.font = 'bold 22px Helvetica, Arial, sans-serif';
+    g.globalAlpha = 0.7;
+    g.fillText('LEAVE PROOF · [E] TO READ', 512, 72);
+    g.globalAlpha = 1;
+
+    if (!items.length) {
+      g.fillStyle = 'rgba(46,38,32,0.75)';
+      g.font = 'bold 30px Helvetica, Arial, sans-serif';
+      g.fillText('no notes yet. be first.', 512, 380);
+    }
+    items.slice(0, 6).forEach((n, i) => {
+      const cx = 30 + (i % 2) * 500, cy = 112 + Math.floor(i / 2) * 194;
+      g.save();
+      g.translate(cx + 232, cy + 86);
+      g.rotate((i % 3 - 1) * 0.035);
+      g.translate(-232, -86);
+      g.fillStyle = '#fdf6ea';
+      g.shadowColor = 'rgba(0,0,0,0.35)'; g.shadowBlur = 12; g.shadowOffsetY = 5;
+      g.fillRect(0, 0, 464, 172);
+      g.shadowBlur = 0; g.shadowOffsetY = 0;
+      g.fillStyle = '#e8552f';
+      g.beginPath(); g.arc(232, 14, 8, 0, Math.PI * 2); g.fill();
+      g.textAlign = 'left';
+      g.fillStyle = '#c2491c';
+      g.font = 'bold 27px Helvetica, Arial, sans-serif';
+      g.fillText('@' + n.h, 22, 52);
+      g.fillStyle = '#33291f';
+      g.font = 'bold 25px Helvetica, Arial, sans-serif';
+      // wrap the phrase to two lines
+      const words = n.p.split(' ');
+      let line = '', ly = 92;
+      for (const w of words) {
+        if (g.measureText(line + w).width > 420 && line) {
+          g.fillText(line.trim(), 22, ly); ly += 32; line = '';
+          if (ly > 124) break;
+        }
+        line += w + ' ';
+      }
+      if (ly <= 124) g.fillText(line.trim(), 22, ly);
+      g.fillStyle = '#8a7c68';
+      g.font = 'bold 19px Helvetica, Arial, sans-serif';
+      g.fillText(n.stat, 22, 154);
+      g.restore();
+    });
+    wallTex.needsUpdate = true;
+  }
+  drawWall([]);
 
   // Artist in Residence triptych — three flying corgis on the west wall,
   // first thing you can turn and see after walking in
@@ -687,7 +767,7 @@ export function buildCafe(scene) {
   scene.add(dawn);
 
   return {
-    root, colliders, seats, props,
+    root, colliders, seats, props, drawWall,
     counter: { x0: CX0, x1: CX1, z0: CZ0, z1: CZ1 },
     sky, skyNight, skyDawn, dawn, hemi, amb, coveLights, mural,
     tickAir(dt, t) {
