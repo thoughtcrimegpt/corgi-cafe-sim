@@ -1,9 +1,9 @@
 // CORGI CAFE SIMULATOR — 9 Claude Ln, 24/7.
 // Unofficial fan parody. Menu prices are real; everything else is a joke.
-import * as THREE from '../vendor/three.module.min.js?v=6';
-import { buildCafe, ROOM } from './world.js?v=6';
-import { buildPeople, animatePeople, DIALOGUE, say } from './people.js?v=6';
-import { MENU, ADDONS, priceOf, rollHelloWorld } from './menu.js?v=6';
+import * as THREE from '../vendor/three.module.min.js?v=7';
+import { buildCafe, ROOM } from './world.js?v=7';
+import { buildPeople, animatePeople, DIALOGUE, say } from './people.js?v=7';
+import { MENU, ADDONS, priceOf, rollHelloWorld } from './menu.js?v=7';
 
 const CFG = {
   MIN_PER_SEC: 0.85,      // in-game minutes per real second
@@ -291,6 +291,12 @@ function startMusic() {
 
   musicTimer = setInterval(() => {
     if (!AC) return;
+    // if the tab was backgrounded/frozen, skip ahead — never backfill missed
+    // notes, or returning to the tab plays them all at once and janks the frame
+    if (musicNext < AC.currentTime) {
+      musicStep += Math.ceil((AC.currentTime - musicNext) / EIGHTH);
+      musicNext = AC.currentTime + 0.08;
+    }
     while (musicNext < AC.currentTime + 0.5) {
       const t = musicNext + (musicStep % 2 === 1 ? 0.055 : 0); // swing
       const bar = Math.floor(musicStep / 8) % 4;
