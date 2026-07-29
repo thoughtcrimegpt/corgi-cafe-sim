@@ -1,11 +1,11 @@
 // CORGI CAFE SIMULATOR — 9 Claude Ln, 24/7.
 // Unofficial fan parody. Menu prices are real; everything else is a joke.
-import * as THREE from '../vendor/three.module.min.js?v=14';
-import { drawCorgi } from './textures.js?v=14';
-import { PHRASES, HANDLE_RE, fetchNotes, pinNote } from './wall.js?v=14';
-import { buildCafe, ROOM } from './world.js?v=14';
-import { buildPeople, animatePeople, DIALOGUE, say } from './people.js?v=14';
-import { MENU, ADDONS, priceOf, rollHelloWorld } from './menu.js?v=14';
+import * as THREE from '../vendor/three.module.min.js?v=15';
+import { drawCorgi } from './textures.js?v=15';
+import { PHRASES, HANDLE_RE, fetchNotes, pinNote } from './wall.js?v=15';
+import { buildCafe, ROOM } from './world.js?v=15';
+import { buildPeople, animatePeople, DIALOGUE, say } from './people.js?v=15';
+import { MENU, ADDONS, priceOf, rollHelloWorld } from './menu.js?v=15';
 
 const CFG = {
   MIN_PER_SEC: 0.85,      // in-game minutes per real second
