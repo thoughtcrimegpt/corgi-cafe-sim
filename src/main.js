@@ -1,9 +1,9 @@
 // CORGI CAFE SIMULATOR — 9 Claude Ln, 24/7.
 // Unofficial fan parody. Menu prices are real; everything else is a joke.
-import * as THREE from '../vendor/three.module.min.js';
-import { buildCafe, ROOM } from './world.js';
-import { buildPeople, animatePeople, DIALOGUE, say } from './people.js';
-import { MENU, ADDONS, priceOf, rollHelloWorld } from './menu.js';
+import * as THREE from '../vendor/three.module.min.js?v=3';
+import { buildCafe, ROOM } from './world.js?v=3';
+import { buildPeople, animatePeople, DIALOGUE, say } from './people.js?v=3';
+import { MENU, ADDONS, priceOf, rollHelloWorld } from './menu.js?v=3';
 
 const CFG = {
   MIN_PER_SEC: 0.85,      // in-game minutes per real second
@@ -17,7 +17,7 @@ const CFG = {
   SPEED: 3.05,
   SPRINT: 1.62,
   EYE: 1.62,
-  RADIUS: 0.33,
+  RADIUS: 0.26,
 };
 
 const S = {
@@ -46,7 +46,7 @@ app.appendChild(renderer.domElement);
 
 // The scene renders into a small buffer and gets scaled up by the browser with
 // nearest-neighbour, which is what gives everything its chunky pixel edges.
-const PIXEL_HEIGHT = 328;
+const PIXEL_HEIGHT = 400;
 function sizeRenderer() {
   const aspect = Math.max(0.4, innerWidth / Math.max(1, innerHeight));
   const h = PIXEL_HEIGHT;
@@ -76,13 +76,29 @@ const P = {
 };
 
 const keys = {};
+// Map by physical position (e.code) AND typed letter (e.key), so WASD works on
+// QWERTY, AZERTY, Dvorak, Colemak, and remapped keyboards alike.
+const KEY_ALIAS = {
+  w: 'KeyW', a: 'KeyA', s: 'KeyS', d: 'KeyD',
+  e: 'KeyE', m: 'KeyM', shift: 'ShiftLeft',
+};
+function keyCodes(e) {
+  const out = [];
+  if (e.code) out.push(e.code);
+  const alias = KEY_ALIAS[(e.key || '').toLowerCase()];
+  if (alias && !out.includes(alias)) out.push(alias);
+  return out;
+}
 addEventListener('keydown', e => {
-  keys[e.code] = true;
-  if (e.code === 'KeyE' || e.code === 'Space') { e.preventDefault(); onAction(); }
-  if (e.code === 'KeyM') toggleAudio();
+  const codes = keyCodes(e);
+  for (const c of codes) keys[c] = true;
+  if (codes.includes('KeyE') || e.code === 'Space') { e.preventDefault(); onAction(); }
+  if (codes.includes('KeyM')) toggleAudio();
   if (e.code === 'Escape' && S.mode === 'order') closeOrder();
 });
-addEventListener('keyup', e => { keys[e.code] = false; });
+addEventListener('keyup', e => { for (const c of keyCodes(e)) keys[c] = false; });
+// a stuck key across a focus change is worse than a dropped one
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
 
 let locked = false, dragging = false, dragX = 0, dragY = 0;
 const cv = renderer.domElement;
@@ -673,15 +689,24 @@ function interactables() {
   const cp = P.pos;
   const near = (x, z, r) => (cp.x - x) ** 2 + (cp.z - z) ** 2 < r * r;
 
-  // counter
-  if (near(20.4, 7.6, 2.6)) list.push({ kind: 'order', label: 'ORDER AT THE COUNTER', x: 20.4, z: 7.9 });
+  // counter: the register ends take orders; nico holds the middle, and
+  // talking to him includes ordering — so the two prompts never fight.
+  const nearNico = near(20.6, 8.6, 3.1);
+  if (!nearNico && near(18.0, 7.7, 2.0)) list.push({ kind: 'order', label: 'ORDER AT THE COUNTER', x: 18.0, z: 8.2 });
+  if (!nearNico && near(23.2, 7.7, 2.0)) list.push({ kind: 'order', label: 'ORDER AT THE COUNTER', x: 23.2, z: 8.2 });
 
   for (const n of people.npcs) {
     if (n.hidden) continue;
     const x = n.group.position.x, z = n.group.position.z;
-    if (near(x, z, n.id === 'trudy' ? 1.9 : n.id === 'frogu' ? 1.9 : 2.4)) {
+    const range = n.id === 'nico' ? 3.4 : (n.id === 'trudy' || n.id === 'frogu') ? 1.9 : 2.4;
+    if (near(x, z, range)) {
       const nm = n.member || n.name;
-      list.push({ kind: 'npc', npc: n, label: (n.id === 'trudy' ? 'PET ' : 'TALK TO ') + nm, x, z });
+      list.push({
+        kind: 'npc', npc: n, x, z,
+        label: n.id === 'trudy' ? 'PET ' + nm
+          : n.id === 'nico' ? 'TALK / ORDER — NICO'
+          : 'TALK TO ' + nm,
+      });
     }
   }
 

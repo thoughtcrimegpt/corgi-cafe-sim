@@ -1,6 +1,6 @@
 // The cafe itself: geometry, colliders, seats, props.
-import * as THREE from '../vendor/three.module.min.js';
-import * as T from './textures.js';
+import * as THREE from '../vendor/three.module.min.js?v=3';
+import * as T from './textures.js?v=3';
 
 export const ROOM = { x0: 0, x1: 25, z0: 0, z1: 10.5, h: 3.5 };
 
@@ -420,7 +420,9 @@ export function buildCafe(scene) {
     ped.position.set(x, 0.36, z); root.add(ped);
     const base = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.3, 0.04, 12), legMat);
     base.position.set(x, 0.02, z); root.add(base);
-    collide(x, z, w * 0.92, d * 0.92);
+    // collider deliberately smaller than the tabletop — with the player's
+    // radius added back it lands right at the visible edge, no phantom walls
+    collide(x, z, w * 0.78, d * 0.78);
     return t;
   }
 

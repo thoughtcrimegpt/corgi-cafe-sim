@@ -1,5 +1,5 @@
 // Procedural canvas textures. No external image assets — everything is drawn at runtime.
-import * as THREE from '../vendor/three.module.min.js';
+import * as THREE from '../vendor/three.module.min.js?v=3';
 
 export const PAL = {
   orange:  '#e8552f',
