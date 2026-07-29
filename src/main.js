@@ -1,11 +1,11 @@
 // CORGI CAFE SIMULATOR — 9 Claude Ln, 24/7.
 // Unofficial fan parody. Menu prices are real; everything else is a joke.
-import * as THREE from '../vendor/three.module.min.js?v=15';
-import { drawCorgi } from './textures.js?v=15';
-import { PHRASES, HANDLE_RE, fetchNotes, pinNote } from './wall.js?v=15';
-import { buildCafe, ROOM } from './world.js?v=15';
-import { buildPeople, animatePeople, DIALOGUE, say } from './people.js?v=15';
-import { MENU, ADDONS, priceOf, rollHelloWorld } from './menu.js?v=15';
+import * as THREE from '../vendor/three.module.min.js?v=16';
+import { drawCorgi } from './textures.js?v=16';
+import { PHRASES, HANDLE_RE, fetchNotes, pinNote } from './wall.js?v=16';
+import { buildCafe, ROOM } from './world.js?v=16';
+import { buildPeople, animatePeople, DIALOGUE, say } from './people.js?v=16';
+import { MENU, ADDONS, priceOf, rollHelloWorld } from './menu.js?v=16';
 
 const CFG = {
   MIN_PER_SEC: 0.85,      // in-game minutes per real second
@@ -30,6 +30,10 @@ const S = {
   celebrate: false, confetti: null, confettiT: 0,
   policy: null,                       // {premium, claimsLeft, claims, paidOut, claimTimes}
   sipping: null,                      // {caf, foc, dur, t} — the cup in your hand
+  quick: false,                       // EXPRESS shift: sim runs at 2×
+  lockin: false,                      // the 5am mood shift, fired once
+  wallToasts: null,                   // game-minute marks for wall-note toasts
+  trudyVisitAt: 0, trudyPhase: 0, trudyIgnoreT: 0,
   buffs: [],                          // {id,name,t,bad}
   ach: new Set(),
   stats: { drinks: 0, food: 0, spent: 0, peakCaf: 0, met: new Set(), followers: 0, sets: 0, pushups: 0, receipt: [], commits: 0 },
@@ -251,6 +255,8 @@ function toggleAudio() {
 // A cozy procedural lofi loop — warm chords, lazy bass, sparse plucks,
 // vinyl crackle. No audio files; it's all synthesized on the fly.
 let musicBus = null, musicTimer = null, musicStep = 0, musicNext = 0;
+let musicSparse = false;
+function musicSetSparse(v) { musicSparse = v; }
 const CHORDS = [
   [174.61, 220.0, 261.63, 329.63],   // Fmaj7
   [146.83, 174.61, 220.0, 261.63],   // Dm7
@@ -310,8 +316,8 @@ function startMusic() {
       const inBar = musicStep % 8;
 
       if (inBar === 0) {
-        // pad
-        for (const f of chord) mnote(f, t, EIGHTH * 7.6, 'triangle', 0.05);
+        // pad — thinner after the 5am lock-in
+        for (const f of chord) mnote(f, t, EIGHTH * 7.6, 'triangle', musicSparse ? 0.028 : 0.05);
         // bass an octave down
         mnote(chord[0] / 2, t, EIGHTH * 3.4, 'sine', 0.16);
       }
@@ -328,8 +334,8 @@ function startMusic() {
         n.connect(f); f.connect(ng); ng.connect(musicBus);
         n.start(t);
       }
-      // sparse pentatonic pluck
-      if (Math.random() < 0.24 && inBar !== 0) {
+      // sparse pentatonic pluck — rarer still once the room locks in
+      if (Math.random() < (musicSparse ? 0.06 : 0.24) && inBar !== 0) {
         mnote(PENTA[(Math.random() * PENTA.length) | 0], t, EIGHTH * 1.7, 'triangle', 0.065);
       }
       musicNext += EIGHTH;
@@ -385,9 +391,34 @@ function addBuff(id, name, t, bad) {
 const hasBuff = id => S.buffs.some(b => b.id === id);
 const dropBuff = id => { S.buffs = S.buffs.filter(b => b.id !== id); };
 
+// every achievement in the game — the title screen keeps count across runs
+const ACH_ALL = [
+  'SHIPPED', 'SAW THE SUNRISE', 'THERE ARE NO CORGIS', 'PET THE DOG',
+  'DID THE SET', 'NOTED', 'GNOSIS', 'TOUCHED GRASS', 'FULLY INSURED',
+  'TOOK THE MEETING', 'THE MOAT IS VIBES', 'HEARD THE THESIS', 'HELLO WORLD',
+  '$14 BREAKFAST', 'THE PENTAGON', 'WIRED IN', 'ORDERED FOR THE TABLE',
+  'CREATINE', 'LOSS RATIO', 'MORAL HAZARD', 'PREFERRED RISK',
+];
+function achEarned() {
+  try { return new Set(JSON.parse(localStorage.getItem('ccs_ach') || '[]')); }
+  catch { return new Set(); }
+}
+function renderAchBar() {
+  const bar = el('achbar');
+  if (!bar) return;
+  const got = achEarned();
+  const n = ACH_ALL.filter(a => got.has(a)).length;
+  bar.textContent = n ? `PROOF COLLECTED: ${n}/${ACH_ALL.length}` : '';
+}
+
 function ach(id) {
   if (S.ach.has(id)) return;
   S.ach.add(id);
+  try {
+    const got = achEarned();
+    got.add(id);
+    localStorage.setItem('ccs_ach', JSON.stringify([...got]));
+  } catch { /* private mode keeps no trophies */ }
   toast('★ ' + id);
   blip(880, 0.09, 'triangle', 0.05);
   setTimeout(() => blip(1320, 0.12, 'triangle', 0.045), 90);
@@ -819,6 +850,7 @@ function talkTo(n) {
 
   if (n.id === 'trudy') {
     ach('PET THE DOG');
+    if (S.trudyPhase === 2) { S.trudyPhase = 3; people.trudy.frozen = false; }
     S.focus = 100;
     addBuff('locked', 'LOCKED IN', 30);
     openDialogue(n, [
@@ -1161,7 +1193,7 @@ function receiptPNG(won) {
   g.font = '600 19px Consolas, Menlo, monospace';
   g.fillStyle = '#6b6156';
   g.fillText('9 CLAUDE LN · SAN FRANCISCO', W / 2, 180);
-  g.fillText(`OPEN 24/7 · SHIFT #${shiftNumber()}`, W / 2, 206);
+  g.fillText(`OPEN 24/7 · SHIFT #${shiftNumber()}${S.quick ? ' · EXPRESS' : ''}`, W / 2, 206);
 
   let y = head + 8;
   const dash = () => {
@@ -1369,8 +1401,9 @@ const EVENTS = [
 
 function fireEvent() {
   const roll = Math.random();
-  // people-driven interrupts — policyholders get a drive-by instead of a pitch
-  if (roll < 0.34 && !hasBuff('shield')) {
+  // people-driven interrupts — policyholders get a drive-by instead of a
+  // pitch, and after the 5am lock-in nobody works the room at all
+  if (roll < 0.34 && !hasBuff('shield') && !S.lockin) {
     const who = Math.random() < 0.55
       ? people.gtm[(Math.random() * people.gtm.length) | 0]
       : people.vc;
@@ -1484,31 +1517,34 @@ function step(now) {
   const t = now / 1000;
 
   if (S.running && !S.over) {
-    S.min += dt * CFG.MIN_PER_SEC * (S.mode === 'play' ? 1 : 0.45);
+    // EXPRESS shift: the whole simulation runs at double time — identical
+    // balance in game-minutes, half the real minutes. Movement stays 1×.
+    const sdt = dt * (S.quick ? 2 : 1);
+    S.min += sdt * CFG.MIN_PER_SEC * (S.mode === 'play' ? 1 : 0.45);
 
     // order prep
     if (S.pending) {
-      S.pending.t -= dt;
+      S.pending.t -= sdt;
       if (S.pending.t <= 0) deliver();
     }
 
     // buffs
-    S.buffs.forEach(b => { if (b.t != null) b.t -= dt; });
+    S.buffs.forEach(b => { if (b.t != null) b.t -= sdt; });
     S.buffs = S.buffs.filter(b => b.t == null || b.t > 0);
 
     // caffeine + jitters
     // the cup in your hand — stats stream in sip by sip
     if (S.sipping) {
       const sp = S.sipping;
-      const k = Math.min(dt, sp.t) / sp.dur;
+      const k = Math.min(sdt, sp.t) / sp.dur;
       S.caf = Math.min(100, S.caf + sp.caf * k);
       S.focus = Math.min(100, S.focus + sp.foc * k);
-      sp.t -= dt;
+      sp.t -= sdt;
       if (sp.t <= 0) S.sipping = null;
       if (S.caf >= 100) ach('WIRED IN');
     }
 
-    S.caf = Math.max(0, S.caf - CFG.CAF_DECAY * dt);
+    S.caf = Math.max(0, S.caf - CFG.CAF_DECAY * sdt);
     S.stats.peakCaf = Math.max(S.stats.peakCaf, S.caf);
     if (S.caf > CFG.JITTER_AT) addBuff('jitters', 'THE JITTERS', null, true);
     else dropBuff('jitters');
@@ -1518,9 +1554,10 @@ function step(now) {
       const focM = 0.55 + (S.focus / 100) * 0.75;
       const jm = hasBuff('jitters') ? 0.62 : 1;
       const mm = hasBuff('motiv') ? 1.4 : 1;
-      S.ship = Math.min(100, S.ship + CFG.SHIP_BASE * cafM * focM * jm * mm * dt);
+      S.ship = Math.min(100, S.ship + CFG.SHIP_BASE * cafM * focM * jm * mm * sdt);
       const resist = 1 - S.caf / 260 - (hasBuff('protein') ? 0.35 : 0);
-      if (!hasBuff('locked')) S.focus = Math.max(0, S.focus - CFG.FOC_DRAIN * Math.max(0.3, resist) * dt);
+      const lockMul = S.lockin ? 0.8 : 1;   // the 5am room is kind to focus
+      if (!hasBuff('locked')) S.focus = Math.max(0, S.focus - CFG.FOC_DRAIN * lockMul * Math.max(0.3, resist) * sdt);
       if (S.focus <= 0 && !S._slumped) {
         S._slumped = true;
         toast('you are staring at the same line. <b>get up. get coffee.</b>');
@@ -1528,18 +1565,36 @@ function step(now) {
       if (S.focus > 6) S._slumped = false;
       if (Math.random() < dt * 2.2) blip(1200 + Math.random() * 600, 0.012, 'square', 0.012);
 
-      S.eventT -= dt;
+      S.eventT -= sdt;
       if (S.eventT <= 0) { fireEvent(); S.eventT = 17 + Math.random() * 15; }
     } else {
-      S.focus = Math.min(100, S.focus + CFG.FOC_REGEN * dt);
+      S.focus = Math.min(100, S.focus + CFG.FOC_REGEN * sdt);
     }
 
     // cafe flavor: distant cup clinks and the occasional steam wand
     if (Math.random() < dt * 0.07) blip(1700 + Math.random() * 900, 0.04, 'sine', 0.016);
     if (Math.random() < dt * 0.018) hiss(0.5, 0.028);
 
+    // the wall remembers — other people's notes drift through your shift
+    if (S.wallToasts && S.wallToasts.length && S.min > S.wallToasts[0] && wallCache && wallCache.length) {
+      S.wallToasts.shift();
+      const n = wallCache[(Math.random() * wallCache.length) | 0];
+      toast(`the wall remembers: <b>@${n.handle}</b> — “${PHRASES[n.phrase] ?? '…'}”`, 4200);
+    }
+
+    // 5:00 AM — the room locks in
+    if (!S.lockin && S.min >= 300) {
+      S.lockin = true;
+      toast('<b>5:00 AM.</b> the room locks in.');
+      world.coveLights.forEach(l => { l.intensity *= 0.72; });
+      people.gtm.forEach(p => { p.speed = 0.45; });
+      people.vc.speed = 0.4;
+      people.ambient.forEach(a => { a.lineT = 9999; });   // no more chatter
+      musicSetSparse(true);
+    }
+
     // Trudy comes down partway through the night
-    S.trudyT -= dt * CFG.MIN_PER_SEC;
+    S.trudyT -= sdt * CFG.MIN_PER_SEC;
     if (S.trudyT <= 0 && people.trudy.hidden) {
       people.trudy.hidden = false;
       toast('<b>a corgi has entered the cafe.</b> nobody is working now.');
@@ -1547,6 +1602,32 @@ function step(now) {
       setTimeout(() => blip(960, 0.12, 'triangle', 0.045), 110);
       say(people.squirtle, 'BREAKING: she has returned. no comment from the family.', 6);
       setTimeout(() => say(people.nico, 'she is not supposed to be down here.', 5), 2600);
+      S.trudyVisitAt = S.min + 26 + Math.random() * 18;
+    }
+
+    // sometimes, the chief morale officer makes a house call
+    if (S.trudyPhase === 0 && S.trudyVisitAt && S.min > S.trudyVisitAt && S.seated && !people.trudy.hidden) {
+      S.trudyPhase = 1;
+      people.trudy.approach = new THREE.Vector2(P.pos.x + 0.55, P.pos.z + 0.35);
+    }
+    if (S.trudyPhase === 1) {
+      const td = Math.hypot(people.trudy.group.position.x - P.pos.x, people.trudy.group.position.z - P.pos.z);
+      if (td < 1.4) {
+        S.trudyPhase = 2;
+        S.trudyIgnoreT = 18;
+        people.trudy.approach = null;
+        people.trudy.frozen = true;
+        toast('<b>trudy is at your table.</b>');
+        blip(760, 0.08, 'triangle', 0.045);
+      }
+    }
+    if (S.trudyPhase === 2) {
+      S.trudyIgnoreT -= dt;
+      if (S.trudyIgnoreT <= 0) {
+        S.trudyPhase = 3;
+        people.trudy.frozen = false;
+        say(people.squirtle, 'BREAKING: local founder ignores dog at table. dog remains professional. witnesses shaken.', 7);
+      }
     }
 
     // sunrise ramp over the last 55 minutes
@@ -1579,7 +1660,7 @@ function step(now) {
   animatePeople(people, dt, t, P.pos, S.celebrate);
   world.tickAir(dt, t);
   tickConfetti(dt, t);
-  tickTerminal(dt);
+  tickTerminal(dt * (S.quick ? 2 : 1));
   updateOverlay();
 
   // face NPC labels + bubbles toward the player (sprites already billboard)
@@ -1612,10 +1693,27 @@ function startGame() {
   if (AC && AC.state === 'suspended') AC.resume();
   startMusic();
   loadWall();   // warm the board by the door
+  S.wallToasts = [S.min + 22 + Math.random() * 25, S.min + 110 + Math.random() * 50];
   if (!isTouch) renderer.domElement.requestPointerLock();
   toast('2:47 AM. the machine is hot. <b>go.</b>', 3400);
 }
 el('startbtn').onclick = startGame;
+
+// EXPRESS shift toggle on the title screen — remembered between visits
+function renderSpeedBtn() {
+  el('speedbtn').innerHTML = S.quick
+    ? '<b>CLOCK</b> express · 2×'
+    : '<b>CLOCK</b> normal';
+  el('speedbtn').style.background = S.quick ? 'rgba(232,85,47,.35)' : '';
+}
+try { S.quick = localStorage.getItem('ccs_quick') === '1'; } catch {}
+el('speedbtn').onclick = () => {
+  S.quick = !S.quick;
+  try { localStorage.setItem('ccs_quick', S.quick ? '1' : '0'); } catch {}
+  renderSpeedBtn();
+};
+renderSpeedBtn();
+renderAchBar();
 
 /* ------------------------------------------------------- the celebration -- */
 function celebrate() {
@@ -1705,7 +1803,7 @@ function receiptHTML(won) {
   <div class="receipt">
     <div class="rlogo">🐕</div>
     <div class="rhead">CORGI CAFE</div>
-    <div class="rsub">9 CLAUDE LN · SAN FRANCISCO<br>OPEN 24/7 · SHIFT #${shiftNumber()}</div>
+    <div class="rsub">9 CLAUDE LN · SAN FRANCISCO<br>OPEN 24/7 · SHIFT #${shiftNumber()}${S.quick ? ' · EXPRESS' : ''}</div>
     <div class="rtear"></div>
     <div class="rrow"><span>TIME IN</span><i></i><b>2:47 AM</b></div>
     <div class="rrow"><span>TIME OUT</span><i></i><b>${fmtClock(S.min).replace(/<[^>]+>/g, '')}</b></div>

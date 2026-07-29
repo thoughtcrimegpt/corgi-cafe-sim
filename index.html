@@ -225,6 +225,30 @@
   #pinphrase{background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.16);color:var(--cream);
     border-radius:9px;padding:9px 10px;font:inherit;font-size:13px;max-width:280px;}
   #pinstatus{font-size:12px;opacity:.75;}
+  .pinhint{font-size:11px;opacity:.45;margin-top:9px;text-align:center;letter-spacing:.4px;}
+  #achbar{font-size:11.5px;letter-spacing:2px;opacity:.55;margin-top:16px;
+    font-family:ui-monospace,Consolas,monospace;font-weight:600;}
+
+  /* ------------------------------------------------------------ mobile --- */
+  @media (max-width: 540px) {
+    #clock{font-size:22px;}
+    #clock span{font-size:12px !important;}
+    #clocksub{font-size:9px;letter-spacing:1.2px;}
+    #cash{font-size:16px;}
+    #cashsub{font-size:8.5px;}
+    #term{width:48vw !important;top:calc(64px + env(safe-area-inset-top,0px));padding:5px 8px 7px;}
+    #termhead{font-size:8px;}
+    .cline{font-size:8.5px;}
+    #meters{width:38vw;}
+    .meter .lab{font-size:9px;letter-spacing:1px;}
+    .buff{font-size:10.5px;padding:4px 9px;}
+    #dlgtext{font-size:14px;}
+    .btn{padding:9px 13px;font-size:12px;}
+    #pinhandle{width:120px;}
+    #pinphrase{max-width:190px;}
+    .bigtitle{font-size:clamp(26px,9vw,40px);}
+    #prompt{font-size:12px;padding:7px 12px;}
+  }
   #achv{margin:0 24px 20px;display:flex;gap:6px;flex-wrap:wrap;justify-content:center;}
   .ach{background:rgba(232,85,47,.16);border:1px solid rgba(232,85,47,.5);border-radius:20px;
     padding:5px 11px;font-size:11px;letter-spacing:.6px;}
@@ -310,8 +334,10 @@
     <span class="key"><b>E</b> interact</span>
     <span class="key"><b>SHIFT</b> sprint</span>
     <span class="key"><b>M</b> sound</span>
+    <span class="key" id="speedbtn" style="cursor:pointer" title="express: the whole shift at 2× — same balance, half the time"><b>CLOCK</b> normal</span>
   </div>
   <button class="btn" id="startbtn" style="font-size:15px;padding:13px 30px">ENTER THE CAFE</button>
+  <div id="achbar"></div>
   <p class="sub" style="margin-top:18px;font-size:11.5px;opacity:.4">
     Unofficial fan parody. Not affiliated with anybody. Menu prices are real.
   </p>
@@ -337,6 +363,7 @@
       <button class="btn" id="pinbtn">PIN TO THE WALL</button>
       <span id="pinstatus"></span>
     </div>
+    <div class="pinhint">the wall is the cork board by the front door — go read it next shift</div>
   </div>
   <div id="achv"></div>
   <div style="display:flex;gap:9px;justify-content:center;flex-wrap:wrap;margin:0 20px">
@@ -349,7 +376,7 @@
 
 <div class="flash" id="flash"></div>
 
-<script type="module" src="./src/main.js?v=15"></script>
+<script type="module" src="./src/main.js?v=16"></script>
 <script>
 // analytics — only on the deployed site, so local dev never counts itself
 if (location.hostname.endsWith("github.io")) {
