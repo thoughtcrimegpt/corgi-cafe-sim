@@ -1,7 +1,7 @@
 // NPCs: meshes, idle animation, patrols, and everything they say.
 // Labels and speech bubbles are DATA here — main.js draws them as a crisp DOM
 // overlay at full resolution, outside the pixelated 3D buffer.
-import * as THREE from '../vendor/three.module.min.js?v=3';
+import * as THREE from '../vendor/three.module.min.js?v=4';
 
 const SKINS = [0xe8c39e, 0xc98d63, 0x8d5a3b, 0xf0d3b4, 0x6f4429, 0xd9a97c];
 const TOPS = [0x2f3238, 0x1f4d6b, 0x6b2f3a, 0x3b5c40, 0xd8d2c8, 0x4a3f66, 0x8a4a2b];
@@ -277,7 +277,7 @@ export const DIALOGUE = {
     sub: 'barista / ceo',
     color: '#ffd9a8',
     intro: [
-      "welcome to corgi cafe. open 24/7 — that's not marketing, it's a load-bearing promise.",
+      "welcome to corgi cafe. open 24/7. that's not marketing — that's a promise.",
       "no, there are no corgis. trudy lives upstairs and she does not do meet and greets.",
       "you want the espresso. everyone at this hour wants the espresso and then orders a mocha.",
       "first one's on the house. wire in.",
@@ -290,7 +290,7 @@ export const DIALOGUE = {
       ],
     },
     after: {
-      talk: ["that's fine. the door never closes. neither do i."],
+      talk: ["take your time. best seat in the city and it's always open."],
     },
     repeat: [
       ["still here."],
@@ -298,7 +298,7 @@ export const DIALOGUE = {
       ["people keep arguing about whether the grind is exaggerated. it's 3am and every seat is taken. that's not a vibe, that's data."],
       ["someone posted that corgi legs were 'net inferior'. banned. nothing personal — structural."],
       ["i sleep upstairs. mattress on the floor. shortest commute in the city."],
-      ["if you're here at 4am you're either building something or avoiding something. rent's the same either way."],
+      ["if you're here at 4am you're building something. that's the whole membership test, and you passed."],
       ["sixty percent of the first thirty people here got the tattoo. i'm not going to explain that."],
       ["the retail space was a required add-on to the office lease. i assumed the landlord made that up. he did not. so: here we are."],
     ],
@@ -382,12 +382,12 @@ export const DIALOGUE = {
   },
 
   gtm: {
-    name: 'GTM POD',
-    sub: 'outbound, 3am shift',
+    name: 'GTM TEAM',
+    sub: 'friendly. relentless.',
     color: '#ffc3d8',
     intro: [
       "hi! quick one — who's handling insurance for your startup right now?",
-      "we're the GTM pod. we don't sleep either, we just monetize it.",
+      "we're the GTM team. we don't sleep either. we love this, genuinely.",
       "you're pre-seed? perfect. that is precisely our ICP.",
     ],
     choice: {
@@ -452,8 +452,8 @@ export const DIALOGUE = {
     sub: 'observing',
     color: '#8fe08a',
     intro: [
-      "you're in the corgi cafe at 3am, anon. that's not a coffee habit. that's a load-bearing identity.",
-      "i've had eyes on this room since february. the only thing that ever changes is who's crying at the window at 5am.",
+      "you're in the corgi cafe at 3am, anon. that's not a coffee habit. that's infrastructure.",
+      "i've had eyes on this room since february. the only thing that ever changes is who's pitching who at the window seats.",
       "there are no corgis. there have never been corgis. it was never about the corgis.",
     ],
     repeat: [
@@ -481,7 +481,7 @@ export const AMBIENT_LINES = [
   "i haven't written a line of this myself and honestly it's beautiful",
   "is the wifi password on the wall or is that a koan",
   "there are no corgis",
-  "$14 is fine if it's your only meal of the day",
+  "the smoothie is dinner tonight. 41 grams. worth it.",
   "i'm not tired, i'm in a different timezone spiritually",
   "yes it's 3am. yes i'm on a call with singapore.",
   "my cofounder and i are aligned. we are aligned. we are aligned.",
@@ -551,7 +551,7 @@ export function buildPeople(scene, world) {
   GTM_NAMES.forEach((nm, i) => {
     const p = mk('gtm', { top: [0xf0e6da, 0x1c1c22, 0xdfc7d6][i], skin: SKINS[(i * 2) % SKINS.length], hair: HAIRS[i % HAIRS.length] },
       6 + i * 3.5, 3.9, Math.PI / 2);
-    p.labelInfo = { name: nm, sub: 'go-to-market', color: '#ffc3d8' };
+    p.labelInfo = { name: nm, sub: 'friendly. relentless.', color: '#ffc3d8' };
     p.patrol = gtmPatrol;
     p.wp = i * 1;
     p.speed = 0.95;

@@ -1,9 +1,9 @@
 // CORGI CAFE SIMULATOR — 9 Claude Ln, 24/7.
 // Unofficial fan parody. Menu prices are real; everything else is a joke.
-import * as THREE from '../vendor/three.module.min.js?v=3';
-import { buildCafe, ROOM } from './world.js?v=3';
-import { buildPeople, animatePeople, DIALOGUE, say } from './people.js?v=3';
-import { MENU, ADDONS, priceOf, rollHelloWorld } from './menu.js?v=3';
+import * as THREE from '../vendor/three.module.min.js?v=4';
+import { buildCafe, ROOM } from './world.js?v=4';
+import { buildPeople, animatePeople, DIALOGUE, say } from './people.js?v=4';
+import { MENU, ADDONS, priceOf, rollHelloWorld } from './menu.js?v=4';
 
 const CFG = {
   MIN_PER_SEC: 0.85,      // in-game minutes per real second
@@ -941,7 +941,12 @@ function move(dt) {
   // arrow keys turn/walk so the game is playable with no mouse at all
   if (keys.ArrowLeft) P.yaw += dt * 1.9;
   if (keys.ArrowRight) P.yaw -= dt * 1.9;
-  if (S.seated) return false;   // you can still look around; you just can't wander
+  if (S.seated) {
+    // in a chair, A/D turn the view too — dead keys read as broken keys
+    if (keys.KeyA) P.yaw += dt * 1.9;
+    if (keys.KeyD) P.yaw -= dt * 1.9;
+    return false;
+  }
   if (keys.KeyW || keys.ArrowUp) iz -= 1;
   if (keys.KeyS || keys.ArrowDown) iz += 1;
   if (keys.KeyA) ix -= 1;
@@ -1102,7 +1107,12 @@ function step(now) {
     curTarget = bestTarget();
     if (curTarget) {
       promptEl.style.display = 'block';
-      promptEl.innerHTML = `<b>[${isTouch ? 'E' : 'E'}]</b> ${curTarget.label}`;
+      promptEl.innerHTML = `<b>[E]</b> ${curTarget.label}` +
+        (S.seated && curTarget.kind === 'stand' ? ' <span style="opacity:.55">· working…</span>' : '');
+    } else if (S.seated) {
+      // never leave the player wondering why WASD stopped moving them
+      promptEl.style.display = 'block';
+      promptEl.innerHTML = `<b>[E]</b> STAND UP <span style="opacity:.55">· working…</span>`;
     } else promptEl.style.display = 'none';
   } else if (S.mode !== 'play') {
     promptEl.style.display = 'none';
@@ -1221,7 +1231,7 @@ function receiptHTML(won) {
     <div class="rrow rship"><span>SHIPPED</span><i></i><b>${S.ship.toFixed(0)}%</b></div>
     <div class="rstatus">${won
       ? 'STATUS: ESCAPED THE PERMANENT<br>UNDERCLASS*<br><span>*for one business day</span>'
-      : 'STATUS: THE SUN CAME UP.<br><span>the cafe does not close. that is the problem.</span>'}</div>
+      : 'STATUS: THE SUN CAME UP.<br><span>good news: the cafe never closes. run it back.</span>'}</div>
     <div class="rbarcode"></div>
     <div class="rfoot">THERE ARE NO CORGIS · THANK YOU</div>
   </div>`;
