@@ -1,9 +1,9 @@
 // CORGI CAFE SIMULATOR — 9 Claude Ln, 24/7.
 // Unofficial fan parody. Menu prices are real; everything else is a joke.
-import * as THREE from '../vendor/three.module.min.js?v=9';
-import { buildCafe, ROOM } from './world.js?v=9';
-import { buildPeople, animatePeople, DIALOGUE, say } from './people.js?v=9';
-import { MENU, ADDONS, priceOf, rollHelloWorld } from './menu.js?v=9';
+import * as THREE from '../vendor/three.module.min.js?v=10';
+import { buildCafe, ROOM } from './world.js?v=10';
+import { buildPeople, animatePeople, DIALOGUE, say } from './people.js?v=10';
+import { MENU, ADDONS, priceOf, rollHelloWorld } from './menu.js?v=10';
 
 const CFG = {
   MIN_PER_SEC: 0.85,      // in-game minutes per real second
@@ -877,18 +877,51 @@ function resolveChoice(n, tag) {
     return;
   }
   if (n.id === 'vc') {
-    if (tag === 'take') {
-      n.choiceDone = true;
-      S.min += 14;
-      S.cash += 40;
-      S.ship = Math.min(100, S.ship + 2);
-      ach('TOOK THE MEETING');
-      toast('he covered your tab. <b>+$40.</b> he also had one good idea. +2%');
-      setTimeout(() => openDialogue(n, d.after.take), 260);
-    } else {
+    if (tag === 'no') {
       S.stats.followers += 1;
       toast('he followed you. <b>+1 follower.</b>');
       setTimeout(() => openDialogue(n, d.after.no), 260);
+      return;
+    }
+    if (tag === 'thesis') {
+      // you asked. eight minutes later you know about slope and intercept.
+      S.min += 8;
+      S.stats.followers += 1;
+      ach('HEARD THE THESIS');
+      toast('<b>8 minutes gone.</b> he followed you, though.');
+      setTimeout(() => openDialogue(n, d.after.thesis), 260);
+      return;
+    }
+    if (tag === 'raising') {
+      setTimeout(() => openDialogue(n, d.mid.lines, d.mid.choice, t2 => {
+        if (t2 === 'painkiller') {
+          n.choiceDone = true;
+          S.min += 14;
+          S.cash += 40;
+          S.ship = Math.min(100, S.ship + 2);
+          ach('TOOK THE MEETING');
+          toast('the check cleared. <b>+$40.</b> the diligence was one question. +2%');
+          setTimeout(() => openDialogue(n, d.after.painkiller), 260);
+        } else if (t2 === 'vitamin') {
+          if (Math.random() < 0.5) {
+            S.stats.followers += 2;
+            toast('he stole your line. <b>+2 followers.</b>');
+            setTimeout(() => openDialogue(n, d.after.vitaminGood), 260);
+          } else {
+            S.stats.followers += 1;
+            toast('supplements are not in thesis. <b>+1 follower</b>, though.');
+            setTimeout(() => openDialogue(n, d.after.vitaminBad), 260);
+          }
+        } else if (t2 === 'vibes') {
+          n.choiceDone = true;
+          S.min += 6;
+          S.cash += 15;
+          S.ship = Math.min(100, S.ship + 1);
+          ach('THE MOAT IS VIBES');
+          toast('conviction check, on the spot. <b>+$15.</b>');
+          setTimeout(() => openDialogue(n, d.after.vibes), 260);
+        }
+      }), 260);
     }
   }
 }
@@ -930,7 +963,7 @@ function runQuote(n, d) {
     const why = parts.length ? ` (${parts.join(', ')})` : '';
     openDialogue(n, [
       `ok. the model likes you more than it should. $${prem.toFixed(2)}, single-shift named-peril policy${why}.`,
-      'form CC-247. effective on bind, expires 6:00 AM. covers three occurrences: interruptions, focus loss, doomscroll events. zero deductible.',
+      'form CC-247. effective on bind, expires 6:00 AM. covers three occurrences: interruptions, focus loss, doomscroll events. cash settlement, zero deductible.',
       'exclusions: acts of dog. claims settle in about ninety seconds.',
     ], {
       prompt: `$${prem.toFixed(2)}. three occurrences, per-occurrence limit, zero deductible. do we have a binder?`,
@@ -949,7 +982,7 @@ function runQuote(n, d) {
       }
       S.cash -= prem;
       S.stats.spent += prem;
-      S.policy = { premium: prem, claimsLeft: 3, claims: 0, paidOut: 0 };
+      S.policy = { premium: prem, claimsLeft: 3, claims: 0, paidOut: 0, claimTimes: [] };
       S.stats.receipt.push({ n: 'Named-peril policy · CC-247', p: prem, q: 1 });
       n.choiceDone = true;
       ach('FULLY INSURED');
@@ -963,20 +996,37 @@ function runQuote(n, d) {
 }
 
 function fileClaim(e) {
-  // the bad thing still happens on screen — then the payout lands
+  // Cash settlement, not stat restoration. The bad thing happened; the
+  // adjuster values the loss and the money lands — usually right about
+  // espresso price, which is the whole ecosystem.
+  // Settlement is delayed, so re-check the occurrence limit at payout time.
+  if (!S.policy || S.policy.claimsLeft <= 0) return;
   S.policy.claimsLeft--;
   S.policy.claims++;
+  S.policy.claimTimes.push(S.min);
   if (!S.policy.claimsLeft) dropBuff('policy');
   else { dropBuff('policy'); addBuff('policy', 'INSURED ×' + S.policy.claimsLeft, null); }
+
   const secs = 84 + (Math.random() * 14 | 0);
-  const restored = [];
-  if (e.foc) { S.focus = Math.min(100, S.focus - e.foc); restored.push('focus restored'); }
-  if (e.min) { S.min -= e.min; restored.push(e.min + ' minutes back'); }
-  S.policy.paidOut += (e.foc ? -e.foc * 0.4 : 0) + (e.min ? e.min * 1.2 : 0);
-  toast(`<b>CLAIM APPROVED</b> in ${secs}s — ${restored.join(', ') || 'made whole'}.`);
+  let value = (e.foc ? -e.foc * 0.55 : 0) + (e.min ? e.min * 2.2 : 0);
+  value = Math.max(2.4, Math.round(value * 20) / 20);
+  S.cash += value;
+  S.policy.paidOut += value;
+
+  const espressoNote = value >= 3.25 ? " that's an espresso and change." : '';
+  toast(`<b>CLAIM APPROVED</b> in ${secs}s — <b>$${value.toFixed(2)}</b> to your card.${espressoNote}`);
+
+  // three claims inside 45 game-minutes is a pattern, and patterns get priced
+  const ct = S.policy.claimTimes;
+  const hazard = ct.length >= 3 && ct[ct.length - 1] - ct[ct.length - 3] <= 45;
   const agent = people.gtm[(Math.random() * people.gtm.length) | 0];
-  const lines = DIALOGUE.gtm.claimLines;
-  say(agent, lines[(Math.random() * lines.length) | 0], 4);
+  if (hazard) {
+    ach('MORAL HAZARD');
+    say(agent, "three claims in under an hour. approved, obviously. but we're going to need to talk at renewal.", 6);
+  } else {
+    const lines = DIALOGUE.gtm.claimLines;
+    say(agent, lines[(Math.random() * lines.length) | 0], 4);
+  }
   blip(880, 0.07, 'triangle', 0.04);
   if (S.policy.claims >= 3) ach('LOSS RATIO');
 }

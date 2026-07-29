@@ -1,7 +1,7 @@
 // NPCs: meshes, idle animation, patrols, and everything they say.
 // Labels and speech bubbles are DATA here — main.js draws them as a crisp DOM
 // overlay at full resolution, outside the pixelated 3D buffer.
-import * as THREE from '../vendor/three.module.min.js?v=9';
+import * as THREE from '../vendor/three.module.min.js?v=10';
 
 const SKINS = [0xe8c39e, 0xc98d63, 0x8d5a3b, 0xf0d3b4, 0x6f4429, 0xd9a97c];
 const TOPS = [0x2f3238, 0x1f4d6b, 0x6b2f3a, 0x3b5c40, 0xd8d2c8, 0x4a3f66, 0x8a4a2b];
@@ -299,6 +299,7 @@ export const DIALOGUE = {
       ["people keep arguing about whether the grind is exaggerated. it's 3am and every seat is taken. that's not a vibe, that's data."],
       ["a cafe that's only full at 3am is adverse selection with an espresso machine. i know exactly who walks in here. that's the point."],
       ["legacy carriers would look at this room and see uninsurable sleep schedules. i look at this room and see fourteen-hour focus blocks. same data. better read."],
+      ["people buy the policy, get interrupted, spend the settlement on espresso. the money never leaves the building. that's not a scheme. that's an ecosystem."],
       ["someone posted that corgi legs were 'net inferior'. banned. nothing personal — structural."],
       ["i sleep upstairs. mattress on the floor. shortest commute in the city."],
       ["if you're here at 4am you're building something. that's the whole membership test, and you passed."],
@@ -426,8 +427,8 @@ export const DIALOGUE = {
     ],
     after: {
       bound: [
-        "bound. you're covered. next three bad things that happen tonight, we pay out.",
-        "claims go through in about ninety seconds. you won't even stop typing.",
+        "bound. next three bad things that happen to you, we cut a check. cash settlement, straight to the card.",
+        "most people spend the payout at the counter within a minute. we've noticed. we're fine with it.",
       ],
       declined: [
         "totally fair. the quote's good all night. it will be different, but it'll be good.",
@@ -448,8 +449,9 @@ export const DIALOGUE = {
       ["my quota resets at midnight. so does the cafe. we understand each other."],
     ],
     claimLines: [
-      'claim approved. 87 seconds. you can keep typing.',
+      'paid. buy yourself something caffeinated.',
       'approved. 91 seconds. legacy carriers are still finding a pen.',
+      'settlement\'s on the card. the espresso machine takes it, by the way.',
       'that one\'s covered. always was.',
     ],
   },
@@ -462,16 +464,49 @@ export const DIALOGUE = {
       "quick question. are you raising?",
     ],
     choice: {
-      prompt: 'i can do fifteen right now. i have nowhere to be, structurally.',
+      prompt: "i can do fifteen right now. i have nowhere to be, structurally.",
       options: [
-        { label: 'TAKE THE MEETING', tag: 'take' },
+        { label: "WE'RE RAISING", tag: 'raising' },
+        { label: "WHAT'S YOUR THESIS?", tag: 'thesis' },
         { label: "I'M HEADS DOWN", tag: 'no' },
       ],
     },
+    // the diligence question. one of these answers is money. it's the cringe one.
+    mid: {
+      lines: [
+        "love that. love the energy in this room, by the way. very zero to one.",
+      ],
+      choice: {
+        prompt: 'real quick, and be honest with me: is this a vitamin or a painkiller? and what\'s the moat?',
+        options: [
+          { label: 'PAINKILLER. OBVIOUSLY.', tag: 'painkiller' },
+          { label: 'A VITAMIN THAT BECOMES A PAINKILLER', tag: 'vitamin' },
+          { label: 'THE MOAT IS VIBES', tag: 'vibes' },
+        ],
+      },
+    },
     after: {
-      take: [
-        "love the space. love the energy. what's the wedge.",
-        "...ok that's actually not stupid. coffee's on me.",
+      painkiller: [
+        "painkiller with a wedge. ok. i'm in for a small check — small for me. we can paper it tonight, i have the docs on my phone.",
+        "welcome to the family. we're very hands-off. i'll text you every day.",
+      ],
+      vitaminGood: [
+        "...a compounding vitamin. that's — ok, that's actually a slide. i'm stealing that.",
+        "following you. watching closely. in a supportive way.",
+      ],
+      vitaminBad: [
+        "so, a supplement. hm. we don't really do supplements at our fund.",
+        "but i love the honesty. honesty is so rare at this stage. following you.",
+      ],
+      vibes: [
+        "honestly? in this market? correct. vibes are a moat. distribution is downstream of vibes.",
+        "i'm putting 'vibes-driven development' in the quarterly letter. here — conviction check, on the spot. don't spend it all on smoothies.",
+      ],
+      thesis: [
+        "sure. so. we're thesis-driven but founder-first. pre-seed is really a people business — we invest in slope, not intercept.",
+        "ai-native application layer. picks and shovels. agents, obviously. but only where there's founder-market fit and a wedge into a system of record.",
+        "we like to lead, we like conviction, and we love getting out of the way. we're extremely founder-friendly. ask literally anyone.",
+        "anyway. that was the thesis. this conversation was also, in a sense, diligence.",
       ],
       no: [
         "love that. following you. following you right now, look.",
@@ -482,6 +517,7 @@ export const DIALOGUE = {
       ["everyone in here has a github and a sleep debt. that's a market."],
       ["is the founder here? the one who sleeps upstairs? no reason."],
       ["i'd do a small check. small for me. life-changing for you. isn't that beautiful."],
+      ["we're a signal-dense fund. i don't know what that means either but LPs love it."],
       ["an insurance company that opens a cafe to watch founders work. do you understand how good that underwriting data is. i'm not even mad. i'm taking notes."],
     ],
   },
