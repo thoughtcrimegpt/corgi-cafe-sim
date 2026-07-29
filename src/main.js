@@ -1,10 +1,10 @@
 // CORGI CAFE SIMULATOR — 9 Claude Ln, 24/7.
 // Unofficial fan parody. Menu prices are real; everything else is a joke.
-import * as THREE from '../vendor/three.module.min.js?v=12';
-import { drawCorgi } from './textures.js?v=12';
-import { buildCafe, ROOM } from './world.js?v=12';
-import { buildPeople, animatePeople, DIALOGUE, say } from './people.js?v=12';
-import { MENU, ADDONS, priceOf, rollHelloWorld } from './menu.js?v=12';
+import * as THREE from '../vendor/three.module.min.js?v=13';
+import { drawCorgi } from './textures.js?v=13';
+import { buildCafe, ROOM } from './world.js?v=13';
+import { buildPeople, animatePeople, DIALOGUE, say } from './people.js?v=13';
+import { MENU, ADDONS, priceOf, rollHelloWorld } from './menu.js?v=13';
 
 const CFG = {
   MIN_PER_SEC: 0.85,      // in-game minutes per real second
@@ -1029,6 +1029,15 @@ function receiptPNG(won) {
     R('CLAIMS FILED', String(S.policy.claims));
     R('PAID OUT', '$' + S.policy.paidOut.toFixed(2));
     R('LOSS RATIO', Math.round(S.policy.paidOut / Math.max(0.01, S.policy.premium) * 100) + '%');
+  }
+  const freebies = [];
+  if (S.stats.pushups) freebies.push(`PUSHUPS ×${S.stats.pushups}`);
+  if (S.ach.has('GNOSIS')) freebies.push('GNOSIS ×1');
+  if (S.ach.has('PET THE DOG')) freebies.push('DOG ×1');
+  if (S.stats.followers) freebies.push(`FOLLOWERS +${S.stats.followers}`);
+  if (freebies.length) {
+    R('---');
+    freebies.forEach(f => R(f, '0.00'));
   }
   R('---');
   R('COMMITS', String(S.stats.commits));
