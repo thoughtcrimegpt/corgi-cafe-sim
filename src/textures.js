@@ -1,5 +1,5 @@
 // Procedural canvas textures. No external image assets — everything is drawn at runtime.
-import * as THREE from '../vendor/three.module.min.js?v=4';
+import * as THREE from '../vendor/three.module.min.js?v=5';
 
 export const PAL = {
   orange:  '#e8552f',
@@ -345,6 +345,156 @@ export function jobPosterTexture(role) {
   g.globalAlpha = 0.75;
   g.fillText('CORGI CAFE · EST 2025', 256, 586);
   g.globalAlpha = 1;
+  return tex(c);
+}
+
+// The Artist in Residence triptych — three flying corgis, eyes closed,
+// riffing on the residency announcement art: cape, doctor coat, beanie.
+function drawFlyingCorgi(g, x, y, s, item) {
+  g.save();
+  g.translate(x, y);
+  g.scale(s, s);
+
+  const fur = '#e0995c', cream = '#f7ead8', ink = '#3a2c22';
+
+  // cape flows out behind first so the body overlaps it
+  if (item === 'cape') {
+    g.fillStyle = '#a83226';
+    g.beginPath();
+    g.moveTo(-30, -18);
+    g.bezierCurveTo(-90, -52, -128, -10, -108, 26);
+    g.bezierCurveTo(-96, 2, -74, 30, -52, 12);
+    g.bezierCurveTo(-44, 24, -34, 16, -30, 4);
+    g.closePath();
+    g.fill();
+  }
+
+  // body — long and horizontal, mid-leap
+  g.fillStyle = fur;
+  g.beginPath();
+  g.ellipse(0, 0, 62, 26, -0.06, 0, Math.PI * 2);
+  g.fill();
+  // cream belly
+  g.fillStyle = cream;
+  g.beginPath();
+  g.ellipse(-4, 12, 46, 13, -0.05, 0, Math.PI * 2);
+  g.fill();
+
+  // trailing back legs, front legs reaching
+  g.fillStyle = fur;
+  for (const [lx, ly, a] of [[-52, 18, 0.7], [-40, 22, 0.5], [46, 16, -0.4], [56, 10, -0.55]]) {
+    g.save(); g.translate(lx, ly); g.rotate(a);
+    g.beginPath(); g.ellipse(0, 0, 17, 7, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = cream;
+    g.beginPath(); g.ellipse(item === 'coat' && lx > 0 ? 0 : 12, 0, 5, 5, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = fur;
+    g.restore();
+  }
+
+  // doctor coat drapes over the torso
+  if (item === 'coat') {
+    g.fillStyle = '#fdfbf6';
+    g.beginPath();
+    g.moveTo(-30, -24); g.lineTo(34, -22);
+    g.lineTo(40, 20); g.lineTo(-38, 24);
+    g.closePath(); g.fill();
+    g.strokeStyle = '#d8d2c4'; g.lineWidth = 2.5;
+    g.beginPath(); g.moveTo(4, -22); g.lineTo(0, 22); g.stroke();
+    // stethoscope
+    g.strokeStyle = '#3d4148'; g.lineWidth = 4;
+    g.beginPath(); g.arc(26, 2, 16, 0.5, 2.6); g.stroke();
+    g.fillStyle = '#3d4148';
+    g.beginPath(); g.arc(14, 16, 6, 0, Math.PI * 2); g.fill();
+  }
+  // plain white tee
+  if (item === 'tee') {
+    g.fillStyle = '#fdfbf6';
+    g.beginPath();
+    g.moveTo(-26, -24); g.lineTo(30, -22);
+    g.lineTo(34, 18); g.lineTo(-30, 22);
+    g.closePath(); g.fill();
+  }
+
+  // head, forward and slightly up
+  g.fillStyle = fur;
+  g.beginPath();
+  g.ellipse(70, -14, 24, 20, -0.12, 0, Math.PI * 2);
+  g.fill();
+  // snout
+  g.fillStyle = cream;
+  g.beginPath();
+  g.ellipse(88, -8, 16, 11, -0.1, 0, Math.PI * 2);
+  g.fill();
+  g.fillStyle = ink;
+  g.beginPath();
+  g.ellipse(102, -10, 6.5, 5.5, 0, 0, Math.PI * 2);
+  g.fill();
+
+  // ears — pointed, or a beanie over them
+  if (item === 'beanie') {
+    g.fillStyle = '#2c2f33';
+    g.beginPath();
+    g.ellipse(64, -30, 20, 13, -0.15, Math.PI, Math.PI * 2);
+    g.fill();
+    g.fillRect(45, -32, 39, 8);
+  } else {
+    g.fillStyle = fur;
+    g.beginPath(); g.moveTo(52, -26); g.lineTo(46, -52); g.lineTo(64, -32); g.closePath(); g.fill();
+    g.beginPath(); g.moveTo(66, -30); g.lineTo(68, -54); g.lineTo(80, -32); g.closePath(); g.fill();
+  }
+
+  // closed happy eye + smile
+  g.strokeStyle = ink; g.lineWidth = 2.6; g.lineCap = 'round';
+  g.beginPath(); g.arc(72, -16, 5, 0.15 * Math.PI, 0.85 * Math.PI); g.stroke();
+  g.beginPath(); g.arc(88, -2, 7, 0.1 * Math.PI, 0.7 * Math.PI); g.stroke();
+
+  g.restore();
+}
+
+export function residencyTexture() {
+  const c = cv(1536, 512), g = c.getContext('2d');
+  g.fillStyle = '#f6eeda'; g.fillRect(0, 0, 1536, 512);
+
+  // scattered background doodles: stars, paw prints, a coffee cup
+  const r = rng(2026);
+  g.fillStyle = 'rgba(224,160,80,0.4)';
+  for (let i = 0; i < 26; i++) {
+    const x = r() * 1536, y = r() * 512, s = 3 + r() * 5;
+    g.save(); g.translate(x, y);
+    if (r() > 0.5) {
+      // four-point star
+      g.beginPath();
+      g.moveTo(0, -s * 2); g.quadraticCurveTo(0, 0, s * 2, 0);
+      g.quadraticCurveTo(0, 0, 0, s * 2); g.quadraticCurveTo(0, 0, -s * 2, 0);
+      g.quadraticCurveTo(0, 0, 0, -s * 2);
+      g.fill();
+    } else {
+      g.beginPath(); g.ellipse(0, s, s * 1.3, s * 1.5, 0, 0, Math.PI * 2); g.fill();
+      for (const [tx, ty] of [[-s * 1.2, -s], [0, -s * 1.6], [s * 1.2, -s]]) {
+        g.beginPath(); g.arc(tx, ty, s * 0.55, 0, Math.PI * 2); g.fill();
+      }
+    }
+    g.restore();
+  }
+  // dotted flight trails behind each corgi
+  g.strokeStyle = 'rgba(200,140,70,0.5)'; g.lineWidth = 3; g.setLineDash([2, 12]);
+  for (const [x, y] of [[70, 300], [580, 290], [1090, 300]]) {
+    g.beginPath();
+    g.moveTo(x - 60, y + 30);
+    g.bezierCurveTo(x, y - 40, x + 90, y + 40, x + 160, y - 20);
+    g.stroke();
+  }
+  g.setLineDash([]);
+
+  drawFlyingCorgi(g, 250, 230, 1.7, 'cape');
+  drawFlyingCorgi(g, 762, 230, 1.7, 'coat');
+  drawFlyingCorgi(g, 1274, 230, 1.7, 'beanie');
+
+  // little plaque strip
+  g.fillStyle = '#3a2c22';
+  g.textAlign = 'center';
+  g.font = 'bold 40px Helvetica, Arial, sans-serif';
+  g.fillText('ARTIST IN RESIDENCE', 768, 468);
   return tex(c);
 }
 

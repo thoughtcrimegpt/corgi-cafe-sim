@@ -1,6 +1,6 @@
 // The cafe itself: geometry, colliders, seats, props.
-import * as THREE from '../vendor/three.module.min.js?v=4';
-import * as T from './textures.js?v=4';
+import * as THREE from '../vendor/three.module.min.js?v=5';
+import * as T from './textures.js?v=5';
 
 export const ROOM = { x0: 0, x1: 25, z0: 0, z1: 10.5, h: 3.5 };
 
@@ -326,6 +326,20 @@ export function buildCafe(scene) {
   tagline.rotation.y = -Math.PI / 2;
   tagline.position.set(24.83, 2.3, 4.6);
   root.add(tagline);
+
+  // Artist in Residence triptych — three flying corgis on the west wall,
+  // first thing you can turn and see after walking in
+  box(0.05, 1.12, 2.84, mat('resframe', { color: 0x2a2320 }), 0.14, 1.85, 8.45);
+  const residency = new THREE.Mesh(
+    new THREE.PlaneGeometry(2.7, 0.9),
+    new THREE.MeshBasicMaterial({ map: T.residencyTexture() })
+  );
+  residency.rotation.y = Math.PI / 2;
+  residency.position.set(0.18, 1.85, 8.45);
+  root.add(residency);
+  const resLight = new THREE.PointLight(0xffe0b8, 0.9, 5, 2);
+  resLight.position.set(1.2, 2.5, 8.45);
+  scene.add(resLight);
 
   // smoothie poster beside the menu board
   const smoothie = new THREE.Mesh(
