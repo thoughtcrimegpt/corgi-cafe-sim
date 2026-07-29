@@ -1,11 +1,11 @@
 // CORGI CAFE SIMULATOR — 9 Claude Ln, 24/7.
 // Unofficial fan parody. Menu prices are real; everything else is a joke.
-import * as THREE from '../vendor/three.module.min.js?v=18';
-import { drawCorgi } from './textures.js?v=18';
-import { PHRASES, HANDLE_RE, fetchNotes, pinNote } from './wall.js?v=18';
-import { buildCafe, ROOM } from './world.js?v=18';
-import { buildPeople, animatePeople, DIALOGUE, say } from './people.js?v=18';
-import { MENU, ADDONS, priceOf, rollHelloWorld } from './menu.js?v=18';
+import * as THREE from '../vendor/three.module.min.js?v=19';
+import { drawCorgi } from './textures.js?v=19';
+import { PHRASES, HANDLE_RE, fetchNotes, pinNote } from './wall.js?v=19';
+import { buildCafe, ROOM } from './world.js?v=19';
+import { buildPeople, animatePeople, DIALOGUE, say } from './people.js?v=19';
+import { MENU, ADDONS, priceOf, rollHelloWorld } from './menu.js?v=19';
 
 const CFG = {
   MIN_PER_SEC: 0.85,      // in-game minutes per real second
@@ -988,7 +988,7 @@ function resolveChoice(n, tag) {
 }
 
 /* ---------------------------------------------------------- the wall -- */
-let wallCache = null, wallLoadedAt = 0;
+let wallCache = null, wallLoadedAt = 0, wallTotal = 0;
 
 function noteStat(n) {
   const t = fmtClock(n.tmin).replace(/<[^>]+>/g, '');
@@ -999,7 +999,9 @@ function noteStat(n) {
 async function loadWall(force) {
   if (!force && wallCache && Date.now() - wallLoadedAt < 60000) return wallCache;
   try {
-    wallCache = await fetchNotes();
+    const { rows, total } = await fetchNotes(0, 100);
+    wallCache = rows;
+    wallTotal = total;
     wallLoadedAt = Date.now();
     world.drawWall(wallCache.map(n => ({
       h: n.handle, p: PHRASES[n.phrase] ?? '…', stat: noteStat(n),
@@ -1010,24 +1012,52 @@ async function loadWall(force) {
   return wallCache;
 }
 
+// handle charset is DB-constrained to [A-Za-z0-9_]{1,15}, safe in a URL
+const noteHTML = (n) =>
+  `<div class="wnote"><a class="wh" href="https://x.com/${n.handle}" target="_blank" rel="noopener noreferrer">@${n.handle} ↗</a>` +
+  `<div class="wp">“${PHRASES[n.phrase] ?? '…'}”</div>` +
+  `<div class="ws">${noteStat(n)}</div></div>`;
+
 function openWall() {
   S.mode = 'wall';
   document.exitPointerLock?.();
   const list = el('walllist');
   list.innerHTML = '<div class="wempty">reading the wall…</div>';
   el('wallp').classList.add('on');
+
+  let shown = 0;
+  const moreBtn = () => {
+    const b = document.createElement('button');
+    b.className = 'btn ghost';
+    b.id = 'wallmore';
+    b.style.margin = '4px auto';
+    b.textContent = `READ OLDER (${wallTotal - shown} more)`;
+    b.onclick = async () => {
+      b.disabled = true; b.textContent = 'reading…';
+      try {
+        const { rows } = await fetchNotes(shown, 100);
+        b.remove();
+        list.insertAdjacentHTML('beforeend', rows.map(noteHTML).join(''));
+        shown += rows.length;
+        if (shown < wallTotal) list.appendChild(moreBtn());
+      } catch {
+        b.disabled = false; b.textContent = 'try again';
+      }
+    };
+    return b;
+  };
+
   loadWall(true).then(notes => {
     if (S.mode !== 'wall') return;
     if (!notes || !notes.length) {
       list.innerHTML = '<div class="wempty">the wall is quiet tonight. finish a shift and be the first.</div>';
       return;
     }
-    // handle charset is DB-constrained to [A-Za-z0-9_]{1,15}, safe in a URL
-    list.innerHTML = notes.map(n =>
-      `<div class="wnote"><a class="wh" href="https://x.com/${n.handle}" target="_blank" rel="noopener noreferrer">@${n.handle} ↗</a>` +
-      `<div class="wp">“${PHRASES[n.phrase] ?? '…'}”</div>` +
-      `<div class="ws">${noteStat(n)}</div></div>`
-    ).join('');
+    shown = notes.length;
+    list.innerHTML =
+      `<div class="wcount">${wallTotal} note${wallTotal === 1 ? '' : 's'} on the wall</div>` +
+      notes.map(noteHTML).join('');
+    if (shown < wallTotal) list.appendChild(moreBtn());
   });
 }
 function closeWall() {
@@ -1153,9 +1183,17 @@ function tickTerminal(dt) {
 }
 
 /* ----------------------------------------------------- the shift stamp -- */
-// Days since the cafe opened (Feb 13, 2026). The receipt keeps count.
-const shiftNumber = () =>
-  Math.max(1, Math.floor((Date.now() - Date.UTC(2026, 1, 13)) / 86400000));
+// YOUR shift count, not the calendar's — first night is #1, and the wall
+// ends up reading like tenure. Incremented once per completed run.
+function shiftNumber() {
+  try { return Math.max(1, +localStorage.getItem('ccs_shifts') || 1); }
+  catch { return 1; }
+}
+function bumpShiftNumber() {
+  try {
+    localStorage.setItem('ccs_shifts', String((+localStorage.getItem('ccs_shifts') || 0) + 1));
+  } catch { /* the untracked shift. lucky. */ }
+}
 
 /* ------------------------------------------------------ receipt as PNG -- */
 function receiptPNG(won) {
@@ -1836,6 +1874,7 @@ function receiptHTML(won) {
 function endGame(won) {
   S.over = true;
   S.lastWon = won;
+  bumpShiftNumber();   // this run now has a number of its own
   document.exitPointerLock?.();
   ach(won ? 'SHIPPED' : 'SAW THE SUNRISE');
 

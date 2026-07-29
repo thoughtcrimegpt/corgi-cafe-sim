@@ -69,14 +69,16 @@ const headers = {
   'Content-Type': 'application/json',
 };
 
-// newest ~40 visible notes
-export async function fetchNotes() {
+// newest-first, paged — the reading panel can walk the whole wall
+export async function fetchNotes(offset = 0, limit = 100) {
   const r = await fetch(
-    `${DB.url}/rest/v1/cafe_notes?select=handle,phrase,ship,tmin,shift,won,claims&order=id.desc&limit=40`,
-    { headers }
+    `${DB.url}/rest/v1/cafe_notes?select=handle,phrase,ship,tmin,shift,won,claims` +
+    `&order=id.desc&offset=${offset}&limit=${limit}`,
+    { headers: { ...headers, Prefer: 'count=exact' } }
   );
   if (!r.ok) throw new Error('wall unavailable (' + r.status + ')');
-  return r.json();
+  const total = +((r.headers.get('content-range') || '').split('/')[1]) || 0;
+  return { rows: await r.json(), total };
 }
 
 export async function pinNote(n) {
