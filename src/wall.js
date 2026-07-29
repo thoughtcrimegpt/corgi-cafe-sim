@@ -72,7 +72,7 @@ const headers = {
 // newest-first, paged — the reading panel can walk the whole wall
 export async function fetchNotes(offset = 0, limit = 100) {
   const r = await fetch(
-    `${DB.url}/rest/v1/cafe_notes?select=handle,phrase,ship,tmin,shift,won,claims` +
+    `${DB.url}/rest/v1/cafe_notes?select=id,handle,phrase,ship,tmin,shift,won,claims` +
     `&order=id.desc&offset=${offset}&limit=${limit}`,
     { headers: { ...headers, Prefer: 'count=exact' } }
   );

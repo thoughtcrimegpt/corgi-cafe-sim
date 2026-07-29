@@ -1,11 +1,11 @@
 // CORGI CAFE SIMULATOR — 9 Claude Ln, 24/7.
 // Unofficial fan parody. Menu prices are real; everything else is a joke.
-import * as THREE from '../vendor/three.module.min.js?v=20';
-import { drawCorgi } from './textures.js?v=20';
-import { PHRASES, HANDLE_RE, fetchNotes, pinNote } from './wall.js?v=20';
-import { buildCafe, ROOM } from './world.js?v=20';
-import { buildPeople, animatePeople, DIALOGUE, say } from './people.js?v=20';
-import { MENU, ADDONS, priceOf, rollHelloWorld } from './menu.js?v=20';
+import * as THREE from '../vendor/three.module.min.js?v=21';
+import { drawCorgi } from './textures.js?v=21';
+import { PHRASES, HANDLE_RE, fetchNotes, pinNote } from './wall.js?v=21';
+import { buildCafe, ROOM } from './world.js?v=21';
+import { buildPeople, animatePeople, DIALOGUE, say } from './people.js?v=21';
+import { MENU, ADDONS, priceOf, rollHelloWorld } from './menu.js?v=21';
 
 const CFG = {
   MIN_PER_SEC: 0.85,      // in-game minutes per real second
@@ -1120,9 +1120,13 @@ function resolveChoice(n, tag) {
 let wallCache = null, wallLoadedAt = 0, wallTotal = 0;
 
 function noteStat(n) {
+  // every note gets its ledger number — the Nth pin in the wall's history.
+  // the personal shift count only appears once it's worth bragging about.
   const t = fmtClock(n.tmin).replace(/<[^>]+>/g, '');
   return `shipped ${n.ship}%${n.won ? '' : ' · sun came up'} · out ${t}` +
-    (n.claims ? ` · ${n.claims} claims` : '') + ` · shift #${n.shift}`;
+    (n.claims ? ` · ${n.claims} claims` : '') +
+    ` · no. ${n.id}` +
+    (n.shift > 1 ? ` · shift #${n.shift}` : '');
 }
 
 async function loadWall(force) {
