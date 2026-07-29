@@ -1,11 +1,11 @@
 // CORGI CAFE SIMULATOR — 9 Claude Ln, 24/7.
 // Unofficial fan parody. Menu prices are real; everything else is a joke.
-import * as THREE from '../vendor/three.module.min.js?v=19';
-import { drawCorgi } from './textures.js?v=19';
-import { PHRASES, HANDLE_RE, fetchNotes, pinNote } from './wall.js?v=19';
-import { buildCafe, ROOM } from './world.js?v=19';
-import { buildPeople, animatePeople, DIALOGUE, say } from './people.js?v=19';
-import { MENU, ADDONS, priceOf, rollHelloWorld } from './menu.js?v=19';
+import * as THREE from '../vendor/three.module.min.js?v=20';
+import { drawCorgi } from './textures.js?v=20';
+import { PHRASES, HANDLE_RE, fetchNotes, pinNote } from './wall.js?v=20';
+import { buildCafe, ROOM } from './world.js?v=20';
+import { buildPeople, animatePeople, DIALOGUE, say } from './people.js?v=20';
+import { MENU, ADDONS, priceOf, rollHelloWorld } from './menu.js?v=20';
 
 const CFG = {
   MIN_PER_SEC: 0.85,      // in-game minutes per real second
@@ -76,6 +76,33 @@ const people = buildPeople(scene, world);
 
 addEventListener('resize', sizeRenderer);
 
+// Your table. If you've shipped from one of these, your mark is on it —
+// visible only to whoever sits close enough to read a tabletop.
+(function tableScratch() {
+  try {
+    const t = JSON.parse(localStorage.getItem('ccs_table') || 'null');
+    if (!t) return;
+    const h = localStorage.getItem('ccs_handle');
+    const c = document.createElement('canvas');
+    c.width = 256; c.height = 64;
+    const g = c.getContext('2d');
+    g.font = 'italic 600 21px Segoe UI, system-ui, sans-serif';
+    g.fillStyle = 'rgba(96,70,42,0.9)';
+    g.textAlign = 'center';
+    g.fillText((h ? '@' + h : 'you') + ' was here', 128, 40);
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const m = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.44, 0.11),
+      new THREE.MeshBasicMaterial({ map: tex, transparent: true })
+    );
+    m.rotation.x = -Math.PI / 2;
+    m.rotation.z = 0.28;
+    m.position.set(t.x + 0.18, 0.787, t.z + 0.17);
+    scene.add(m);
+  } catch { /* no table, no mark */ }
+})();
+
 /* ------------------------------------------------------------ player -- */
 const P = {
   pos: new THREE.Vector3(1.4, CFG.EYE, 5.4),
@@ -122,7 +149,7 @@ let locked = false, dragging = false, dragX = 0, dragY = 0;
 const cv = renderer.domElement;
 
 cv.addEventListener('mousedown', e => {
-  if (!S.running || S.mode !== 'play' || isTouch) return;
+  if (!S.running || (S.mode !== 'play' && S.mode !== 'walkout') || isTouch) return;
   // pointer lock is the good path, but it's blocked in embedded frames —
   // fall back to click-drag so looking around always works.
   if (!locked && cv.requestPointerLock) {
@@ -141,7 +168,7 @@ document.addEventListener('pointerlockchange', () => {
 document.addEventListener('pointerlockerror', () => { locked = false; });
 
 document.addEventListener('mousemove', e => {
-  if (!S.running || (S.mode !== 'play' && S.mode !== 'celebrate')) return;
+  if (!S.running || (S.mode !== 'play' && S.mode !== 'celebrate' && S.mode !== 'walkout')) return;
   let dx = 0, dy = 0;
   if (locked) { dx = e.movementX; dy = e.movementY; }
   else if (dragging) { dx = e.clientX - dragX; dy = e.clientY - dragY; dragX = e.clientX; dragY = e.clientY; }
@@ -648,6 +675,13 @@ function deliver() {
   o.addons.forEach(a => { caf += a.caf; foc += a.foc; });
   if (o.addons.some(a => a.id === 'creatine')) { S.stats.creatine = true; ach('CREATINE'); }
 
+  // the cafe keeps a quiet tab of what you order, across every visit
+  try {
+    const oh = JSON.parse(localStorage.getItem('ccs_orders') || '{}');
+    for (const l of o.lines) oh[l.base.name] = (oh[l.base.name] || 0) + 1;
+    localStorage.setItem('ccs_orders', JSON.stringify(oh));
+  } catch { /* incognito regulars stay strangers */ }
+
   // First sip hits immediately; the rest lands over the next several seconds
   // while the caffeine bar visibly climbs. No more invisible stat teleports.
   S.caf = Math.min(100, S.caf + caf * 0.3);
@@ -730,9 +764,21 @@ function updateOverlay() {
       }
     });
     people.ambient.forEach((a, ai) => {
-      if (!a.bubble) return;
       const gx = a.group.position.x, gz = a.group.position.z;
       const d = Math.hypot(P.pos.x - gx, P.pos.z - gz);
+      // ghost patrons: wall pinners, seated and working, named when you're close
+      if (a.labelInfo) {
+        const range = a.labelRange ?? 5.5;
+        const fade = Math.max(0, Math.min(1, (range - d) / 2));
+        if (fade > 0.02) {
+          const node = overlayNode('amblab:' + ai, 'nlabel');
+          node.div.innerHTML =
+            `<span class="nm" style="color:${a.labelInfo.color}">${a.labelInfo.name}</span>` +
+            `<span class="sb">${a.labelInfo.sub}</span>`;
+          projectTo(node.div, gx, 1.62, gz, fade * 0.9);
+        }
+      }
+      if (!a.bubble) return;
       if (d > 13) return;
       const node = overlayNode('amb:' + ai, 'nbubble');
       node.div.textContent = a.bubble.text;
@@ -826,6 +872,7 @@ function onAction() {
   if (t.kind === 'sit') {
     t.seat.taken = true;
     S.seated = t.seat;
+    S.lastSeat = t.seat;
     P.pos.set(t.seat.pos.x, 1.22, t.seat.pos.z);
     P.yaw = t.seat.yaw + Math.PI;
     toast('you are working. focus burns. coffee helps.');
@@ -850,6 +897,35 @@ function onAction() {
   if (t.kind === 'npc') { talkTo(t.npc); return; }
 }
 
+// what you order most, across every visit — the thing a real cafe knows
+function theUsual() {
+  try {
+    const oh = JSON.parse(localStorage.getItem('ccs_orders') || '{}');
+    const best = Object.entries(oh).sort((a, b) => b[1] - a[1])[0];
+    if (!best || best[1] < 2) return null;
+    for (const sec of MENU) {
+      for (const it of sec.items) {
+        if (it.name === best[0] && !it.special) return { item: it, count: best[1] };
+      }
+    }
+  } catch {}
+  return null;
+}
+
+// nico's choice grows an option once he knows your order
+function nicoChoice(d) {
+  const u = theUsual();
+  if (!u) return d.choice;
+  return {
+    prompt: 'so. the usual, or are we being adventurous?',
+    options: [
+      { label: `THE USUAL — ${u.item.name.toUpperCase()} $${priceOf(u.item, false).toFixed(2)}`, tag: 'usual' },
+      { label: 'ORDER SOMETHING', tag: 'order' },
+      { label: 'JUST TALKING', tag: 'talk' },
+    ],
+  };
+}
+
 function talkTo(n) {
   const d = DIALOGUE[n.id];
   S.stats.met.add(n.member || n.name);
@@ -869,15 +945,54 @@ function talkTo(n) {
     return;
   }
 
-  if (!n.talkedTo) {
-    n.talkedTo = true;
-    if (n.id === 'nico') {
+  if (n.id === 'nico') {
+    // he keeps count of your conversations, across every visit
+    let talks = 0;
+    try {
+      talks = (+localStorage.getItem('ccs_nico_talks') || 0) + 1;
+      localStorage.setItem('ccs_nico_talks', String(talks));
+    } catch {}
+
+    if (!n.talkedTo) {
+      n.talkedTo = true;
       S.caf = Math.min(100, S.caf + 25);
       S.stats.receipt.push({ n: 'Espresso · on the house', p: 0 });
       ach('THERE ARE NO CORGIS');
       setTimeout(() => toast('free espresso. <b>+25 caffeine</b>'), 400);
       hiss(0.6, 0.08);
+      // a regular gets recognized, not pitched
+      const intro = shiftNumber() > 1
+        ? [
+          `back again. shift #${shiftNumber()} for you, i think. i notice things.`,
+          'the machine\'s hot.',
+        ]
+        : d.intro;
+      openDialogue(n, intro, nicoChoice(d), tag => resolveChoice(n, tag));
+      return;
     }
+
+    // once — exactly once, and only for someone who keeps coming back —
+    // he drops the bit. then never mentions it again.
+    let hadMoment = false;
+    try { hadMoment = !!localStorage.getItem('ccs_nico_moment'); } catch {}
+    if (talks >= 5 && !hadMoment) {
+      try { localStorage.setItem('ccs_nico_moment', '1'); } catch {}
+      openDialogue(n, [
+        "honestly? i opened this place because i didn't want to be alone at 3am.",
+        'turns out nobody does.',
+        'anyway. espresso?',
+      ], nicoChoice(d), tag => resolveChoice(n, tag));
+      return;
+    }
+
+    const pool = d.repeat;
+    openDialogue(n, pool[(Math.random() * pool.length) | 0], nicoChoice(d),
+      tag => resolveChoice(n, tag));
+    return;
+  }
+
+  if (!n.talkedTo) {
+    n.talkedTo = true;
     openDialogue(n, d.intro, d.choice, tag => resolveChoice(n, tag));
     return;
   }
@@ -892,6 +1007,20 @@ function resolveChoice(n, tag) {
   const d = DIALOGUE[n.id];
   if (n.id === 'nico') {
     if (tag === 'order') { openOrder(); return; }
+    if (tag === 'usual') {
+      const u = theUsual();
+      if (!u) { openOrder(); return; }
+      const price = priceOf(u.item, false);
+      if (price > S.cash) { toast('declined. (the card, not you.)'); return; }
+      S.cash -= price;
+      S.stats.spent += price;
+      S.stats.receipt.push({ n: u.item.name + ' · the usual', p: price, q: 1 });
+      S.pending = { lines: [{ served: u.item, base: u.item, large: false }], addons: [], t: u.item.prep ?? 5, units: 1 };
+      toast(`he was already making it. <b>${u.item.name}</b>.`);
+      say(people.nico, 'i know. i know what you get.', 4);
+      hiss(0.7, 0.08);
+      return;
+    }
     openDialogue(n, d.after.talk);
     return;
   }
@@ -1006,10 +1135,28 @@ async function loadWall(force) {
     world.drawWall(wallCache.map(n => ({
       h: n.handle, p: PHRASES[n.phrase] ?? '…', stat: noteStat(n),
     })));
+    assignGhosts();
   } catch {
     wallCache = wallCache || null;
   }
   return wallCache;
+}
+
+// The people typing at the tables are the people from the wall. Pin a note,
+// and some night your handle is sitting in here working on something.
+function assignGhosts() {
+  if (!wallCache || !wallCache.length) return;
+  let mine = '';
+  try { mine = (localStorage.getItem('ccs_handle') || '').toLowerCase(); } catch {}
+  const handles = [...new Set(wallCache.map(n => n.handle))]
+    .filter(h => h.toLowerCase() !== mine)
+    .slice(0, 8);
+  people.ambient.forEach((a, i) => {
+    if (i < handles.length && !a.labelInfo) {
+      a.labelInfo = { name: '@' + handles[i], sub: 'was here', color: '#cfc4ff' };
+      a.labelRange = 5.5;
+    }
+  });
 }
 
 // handle charset is DB-constrained to [A-Za-z0-9_]{1,15}, safe in a URL
@@ -1537,8 +1684,14 @@ function move(dt) {
       }
     }
   }
-  P.pos.x = Math.max(0.4, Math.min(ROOM.x1 - 0.4, px));
-  P.pos.z = Math.max(0.5, Math.min(ROOM.z1 - 0.4, pz));
+  if (S.mode === 'walkout' && px < 0.5) {
+    // through the door and onto the lane — the corridor holds you to the doorway
+    P.pos.x = Math.max(-6.5, px);
+    P.pos.z = Math.max(4.55, Math.min(6.25, pz));
+  } else {
+    P.pos.x = Math.max(0.4, Math.min(ROOM.x1 - 0.4, px));
+    P.pos.z = Math.max(0.5, Math.min(ROOM.z1 - 0.4, pz));
+  }
 
   const moving = mag > 0.05;
   P.bob += dt * (moving ? 9.5 : 0);
@@ -1687,17 +1840,32 @@ function step(now) {
     else if (S.min >= CFG.END_MIN) endGame(false);
   }
 
-  if (S.running && S.mode === 'play') {
+  if (S.running && (S.mode === 'play' || S.mode === 'walkout')) {
     const moving = move(dt);   // handles seated internally (you can still turn)
     if (moving && Math.random() < dt * 3.4) blip(90 + Math.random() * 30, 0.03, 'sine', 0.02);
   }
 
-  // camera
+  // walking out: cross the threshold onto claude lane and the night is done
+  if (S.mode === 'walkout') {
+    promptEl.style.display = 'block';
+    promptEl.innerHTML = '<b>→</b> WALK OUT THE FRONT DOOR';
+    if (P.pos.x < -3.2) {
+      S.mode = 'end';
+      S.running = false;
+      el('walkoutbtn').style.display = 'none';
+      el('end').classList.add('on');
+      document.exitPointerLock?.();
+    }
+  }
+
+  // camera — steps down as you leave the raised floor for the lane
+  const outK = S.mode === 'walkout' || S.mode === 'end'
+    ? Math.max(0, Math.min(1, (0.4 - P.pos.x) / 2.2)) : 0;
   const jitterAmp = hasBuff('jitters') ? 0.012 : 0;
   P.sway += dt * 14;
   camera.position.set(
     P.pos.x + Math.sin(P.sway) * jitterAmp,
-    (S.seated ? 1.22 : CFG.EYE) + Math.sin(P.bob) * 0.035 + Math.cos(P.sway * 1.7) * jitterAmp,
+    (S.seated ? 1.22 : CFG.EYE) - outK * 0.52 + Math.sin(P.bob) * 0.035 + Math.cos(P.sway * 1.7) * jitterAmp,
     P.pos.z + Math.cos(P.sway * 0.9) * jitterAmp
   );
   camera.rotation.set(0, 0, 0);
@@ -1722,7 +1890,7 @@ function step(now) {
       promptEl.style.display = 'block';
       promptEl.innerHTML = `<b>[E]</b> STAND UP <span style="opacity:.55">· working…</span>`;
     } else promptEl.style.display = 'none';
-  } else if (S.mode !== 'play') {
+  } else if (S.mode !== 'play' && S.mode !== 'walkout') {
     promptEl.style.display = 'none';
   }
 
@@ -1875,6 +2043,14 @@ function endGame(won) {
   S.over = true;
   S.lastWon = won;
   bumpShiftNumber();   // this run now has a number of its own
+  // regulars get their table — the one you shipped from
+  if (won && S.lastSeat) {
+    try {
+      localStorage.setItem('ccs_table', JSON.stringify({
+        x: S.lastSeat.table.x, z: S.lastSeat.table.z,
+      }));
+    } catch {}
+  }
   document.exitPointerLock?.();
   ach(won ? 'SHIPPED' : 'SAW THE SUNRISE');
 
@@ -1953,6 +2129,16 @@ addEventListener('beforeunload', e => {
   }
 });
 el('againbtn').onclick = () => { leavingOnPurpose = true; location.reload(); };
+
+// the door has been open the whole time
+el('walkoutbtn').onclick = () => {
+  el('end').classList.remove('on');
+  S.mode = 'walkout';
+  S.running = true;
+  world.setDawn(1);
+  toast('the sun is up. the door is open.', 4200);
+  blip(523.25, 0.18, 'triangle', 0.05);
+};
 
 // expose a little state for debugging in the console
 window.CCS = {
