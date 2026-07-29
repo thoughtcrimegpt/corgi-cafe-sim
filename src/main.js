@@ -1,9 +1,9 @@
 // CORGI CAFE SIMULATOR — 9 Claude Ln, 24/7.
 // Unofficial fan parody. Menu prices are real; everything else is a joke.
-import * as THREE from '../vendor/three.module.min.js?v=10';
-import { buildCafe, ROOM } from './world.js?v=10';
-import { buildPeople, animatePeople, DIALOGUE, say } from './people.js?v=10';
-import { MENU, ADDONS, priceOf, rollHelloWorld } from './menu.js?v=10';
+import * as THREE from '../vendor/three.module.min.js?v=11';
+import { buildCafe, ROOM } from './world.js?v=11';
+import { buildPeople, animatePeople, DIALOGUE, say } from './people.js?v=11';
+import { MENU, ADDONS, priceOf, rollHelloWorld } from './menu.js?v=11';
 
 const CFG = {
   MIN_PER_SEC: 0.85,      // in-game minutes per real second
@@ -26,7 +26,8 @@ const S = {
   ship: 0, focus: 70, caf: 0, cash: 40,
   seated: null, mode: 'play',        // play | dialogue | order | celebrate | end
   celebrate: false, confetti: null, confettiT: 0,
-  policy: null,                       // {premium, claimsLeft, claims, paidOut}
+  policy: null,                       // {premium, claimsLeft, claims, paidOut, claimTimes}
+  sipping: null,                      // {caf, foc, dur, t} — the cup in your hand
   buffs: [],                          // {id,name,t,bad}
   ach: new Set(),
   stats: { drinks: 0, food: 0, spent: 0, peakCaf: 0, met: new Set(), followers: 0, sets: 0, pushups: 0, receipt: [] },
@@ -357,13 +358,17 @@ function updateHUD() {
   el('clock').innerHTML = fmtClock(S.min) + '<div id="clocksub">9 CLAUDE LN · OPEN 24/7</div>';
   el('cash').innerHTML = '$' + S.cash.toFixed(2) + '<div id="cashsub">ON THE CARD</div>';
   el('shipv').textContent = S.ship.toFixed(0) + '%';
-  el('focv').textContent = Math.round(S.focus);
-  el('cafv').textContent = Math.round(S.caf);
+  el('focv').textContent = Math.round(S.focus) + (S.sipping && S.sipping.foc > 1 ? ' ▲' : '');
+  el('cafv').textContent = Math.round(S.caf) + (S.sipping && S.sipping.caf > 1 ? ' ▲' : '');
   el('shipbar').firstElementChild.style.width = S.ship + '%';
   el('focbar').firstElementChild.style.width = S.focus + '%';
   el('cafbar').firstElementChild.style.width = S.caf + '%';
   const b = el('buffs');
-  b.innerHTML = S.buffs.map(x =>
+  // the drink pipeline shows up alongside the buffs so it's never a mystery
+  let extra = '';
+  if (S.pending) extra += `<div class="buff brew">☕ BREWING ${Math.ceil(S.pending.t)}s</div>`;
+  if (S.sipping) extra += `<div class="buff brew">SIPPING ${Math.ceil(S.sipping.t)}s</div>`;
+  b.innerHTML = extra + S.buffs.map(x =>
     `<div class="buff${x.bad ? ' bad' : ''}">${x.name}${x.t != null ? ' ' + Math.ceil(x.t) + 's' : ''}</div>`
   ).join('');
 }
@@ -600,13 +605,22 @@ function deliver() {
   o.addons.forEach(a => { caf += a.caf; foc += a.foc; });
   if (o.addons.some(a => a.id === 'creatine')) { S.stats.creatine = true; ach('CREATINE'); }
 
-  S.caf = Math.min(100, S.caf + caf);
-  S.focus = Math.min(100, S.focus + foc);
+  // First sip hits immediately; the rest lands over the next several seconds
+  // while the caffeine bar visibly climbs. No more invisible stat teleports.
+  S.caf = Math.min(100, S.caf + caf * 0.3);
+  S.focus = Math.min(100, S.focus + foc * 0.3);
+  if (caf * 0.7 + foc * 0.7 > 0.5) {
+    S.sipping = { caf: caf * 0.7, foc: foc * 0.7, dur: 7, t: 7 };
+  }
   if (S.caf >= 100) ach('WIRED IN');
 
-  toast(o.lines.length > 1
+  const gains = [];
+  if (caf >= 1) gains.push(`+${Math.round(caf)} caffeine`);
+  if (foc >= 1) gains.push(`+${Math.round(foc)} focus`);
+  const gainNote = gains.length ? ` <b>${gains.join(', ')}</b> as you drink.` : '';
+  toast((o.lines.length > 1
     ? `order up: <b>${o.lines.length} items</b>. you are carrying a tray now.`
-    : `order up: <b>${o.lines[0].served.name}</b>`);
+    : `order up: <b>${o.lines[0].served.name}</b>.`) + gainNote);
   blip(660, 0.08, 'triangle', 0.05);
   setTimeout(() => blip(990, 0.1, 'triangle', 0.04), 80);
 }
@@ -1172,6 +1186,17 @@ function step(now) {
     S.buffs = S.buffs.filter(b => b.t == null || b.t > 0);
 
     // caffeine + jitters
+    // the cup in your hand — stats stream in sip by sip
+    if (S.sipping) {
+      const sp = S.sipping;
+      const k = Math.min(dt, sp.t) / sp.dur;
+      S.caf = Math.min(100, S.caf + sp.caf * k);
+      S.focus = Math.min(100, S.focus + sp.foc * k);
+      sp.t -= dt;
+      if (sp.t <= 0) S.sipping = null;
+      if (S.caf >= 100) ach('WIRED IN');
+    }
+
     S.caf = Math.max(0, S.caf - CFG.CAF_DECAY * dt);
     S.stats.peakCaf = Math.max(S.stats.peakCaf, S.caf);
     if (S.caf > CFG.JITTER_AT) addBuff('jitters', 'THE JITTERS', null, true);
