@@ -1,11 +1,11 @@
 // CORGI CAFE SIMULATOR — 9 Claude Ln, 24/7.
 // Unofficial fan parody. Menu prices are real; everything else is a joke.
-import * as THREE from '../vendor/three.module.min.js?v=17';
-import { drawCorgi } from './textures.js?v=17';
-import { PHRASES, HANDLE_RE, fetchNotes, pinNote } from './wall.js?v=17';
-import { buildCafe, ROOM } from './world.js?v=17';
-import { buildPeople, animatePeople, DIALOGUE, say } from './people.js?v=17';
-import { MENU, ADDONS, priceOf, rollHelloWorld } from './menu.js?v=17';
+import * as THREE from '../vendor/three.module.min.js?v=18';
+import { drawCorgi } from './textures.js?v=18';
+import { PHRASES, HANDLE_RE, fetchNotes, pinNote } from './wall.js?v=18';
+import { buildCafe, ROOM } from './world.js?v=18';
+import { buildPeople, animatePeople, DIALOGUE, say } from './people.js?v=18';
+import { MENU, ADDONS, priceOf, rollHelloWorld } from './menu.js?v=18';
 
 const CFG = {
   MIN_PER_SEC: 0.85,      // in-game minutes per real second
@@ -1904,7 +1904,16 @@ el('copybtn').onclick = () => {
   navigator.clipboard?.writeText(shareText() + '\n' + location.href.split('?')[0]);
   toast('copied.');
 };
-el('againbtn').onclick = () => location.reload();
+// A live shift is protected from accidental reloads — browser shortcuts,
+// extension keybinds (vimium's r!), swipe-back, tab close: all prompt first.
+let leavingOnPurpose = false;
+addEventListener('beforeunload', e => {
+  if (S.running && !S.over && !leavingOnPurpose) {
+    e.preventDefault();
+    e.returnValue = '';
+  }
+});
+el('againbtn').onclick = () => { leavingOnPurpose = true; location.reload(); };
 
 // expose a little state for debugging in the console
 window.CCS = {

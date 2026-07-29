@@ -1,7 +1,7 @@
 // NPCs: meshes, idle animation, patrols, and everything they say.
 // Labels and speech bubbles are DATA here — main.js draws them as a crisp DOM
 // overlay at full resolution, outside the pixelated 3D buffer.
-import * as THREE from '../vendor/three.module.min.js?v=17';
+import * as THREE from '../vendor/three.module.min.js?v=18';
 
 const SKINS = [0xe8c39e, 0xc98d63, 0x8d5a3b, 0xf0d3b4, 0x6f4429, 0xd9a97c];
 const TOPS = [0x2f3238, 0x1f4d6b, 0x6b2f3a, 0x3b5c40, 0xd8d2c8, 0x4a3f66, 0x8a4a2b];
@@ -675,8 +675,12 @@ export function buildPeople(scene, world) {
     id: 'trudy', group: trudyG, name: 'TRUDY', sub: 'chief morale officer',
     home: new THREE.Vector2(1.2, 5.4), talkedTo: false, stage: 0, bubble: null,
     hidden: true, anim: 'trot', animT: 0,
-    patrol: [new THREE.Vector2(4, 6.4), new THREE.Vector2(12, 6.8), new THREE.Vector2(18, 4.2), new THREE.Vector2(6, 3.8)],
-    wp: 0, speed: 1.05,
+    // aisle spots she wanders between — sniffing route, not a patrol
+    spots: [
+      new THREE.Vector2(4, 6.4), new THREE.Vector2(12, 6.8), new THREE.Vector2(18, 4.2),
+      new THREE.Vector2(6, 3.8), new THREE.Vector2(2, 5.3), new THREE.Vector2(20.4, 7.2),
+      new THREE.Vector2(1.6, 3.2), new THREE.Vector2(9.4, 3.8), new THREE.Vector2(15, 6.9),
+    ],
     labelH: 0.85,
     labelInfo: { name: 'TRUDY', sub: 'chief morale officer', color: '#ffcf9a' },
   };
@@ -771,6 +775,94 @@ export function animatePeople(people, dt, t, playerPos, celebrating) {
       continue;
     }
 
+    if (n.id === 'trudy') {
+      // A dog does not patrol. She trots in bursts, meanders, stops to sniff,
+      // looks around, sits. The corgi model's nose points +X, so her facing
+      // yaw is atan2(-dz, dx) — the old code walked her sideways.
+      const pos = n.group.position;
+      n.group.rotation.order = 'YXZ';
+      const d = n.dog || (n.dog = {
+        state: 'trot', t: 2 + Math.random() * 2,
+        tx: 4, tz: 6.4, meander: Math.random() * 9, pitch: 0, headY: 0.32,
+      });
+      const faceToward = (dx, dz, rate) => {
+        const want = Math.atan2(-dz, dx);
+        let diff = want - n.group.rotation.y;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        n.group.rotation.y += diff * Math.min(1, dt * rate);
+      };
+      const pickSpot = () => {
+        const s = n.spots[(Math.random() * n.spots.length) | 0];
+        d.tx = s.x + (Math.random() - 0.5) * 0.8;
+        d.tz = s.y + (Math.random() - 0.5) * 0.8;
+      };
+
+      d.t -= dt;
+      if (n.approach) { d.state = 'trot'; d.tx = n.approach.x; d.tz = n.approach.y; }
+      if (n.frozen) d.state = 'visit';
+      else if (d.state === 'visit') { d.state = 'trot'; pickSpot(); d.t = 3; }
+
+      let bobA = 0, bobF = 12, waddle = 0, pitchTarget = 0, headTarget = 0.32;
+
+      if (d.state === 'trot') {
+        const dx = d.tx - pos.x, dz = d.tz - pos.z;
+        const dist = Math.hypot(dx, dz);
+        if (dist < 0.45 || d.t <= 0) {
+          const r = Math.random();
+          if (r < 0.45) { d.state = 'sniff'; d.t = 2 + Math.random() * 1.6; }
+          else if (r < 0.65) { d.state = 'look'; d.t = 1.4 + Math.random() * 1.2; }
+          else if (r < 0.8) { d.state = 'sit'; d.t = 3 + Math.random() * 3; }
+          else { pickSpot(); d.t = 3 + Math.random() * 3; }
+        } else {
+          // heading wanders around the straight line — dogs don't walk straight
+          const meander = Math.sin(n.animT * 1.4 + d.meander) * 0.3;
+          const want = Math.atan2(-dz, dx) + meander;
+          let diff = want - n.group.rotation.y;
+          while (diff > Math.PI) diff -= Math.PI * 2;
+          while (diff < -Math.PI) diff += Math.PI * 2;
+          n.group.rotation.y += diff * Math.min(1, dt * 4.5);
+          // trot comes in little bursts, and she walks nose-first
+          const burst = 0.55 + 0.45 * Math.abs(Math.sin(n.animT * 1.1 + d.meander));
+          const sp = 1.5 * burst * dt;
+          const th = n.group.rotation.y;
+          pos.x += Math.cos(th) * sp;
+          pos.z += -Math.sin(th) * sp;
+          bobA = 0.03; waddle = 0.055;
+        }
+      } else if (d.state === 'sniff') {
+        headTarget = 0.17;
+        // little shuffling steps, nose to the floor
+        const th = n.group.rotation.y;
+        const shuffle = Math.max(0, Math.sin(n.animT * 3.2)) * 0.09 * dt;
+        pos.x += Math.cos(th) * shuffle;
+        pos.z += -Math.sin(th) * shuffle;
+        if (d.t <= 0) { d.state = 'trot'; pickSpot(); d.t = 3 + Math.random() * 3; }
+      } else if (d.state === 'look') {
+        headTarget = 0.38;
+        n.group.rotation.y += Math.sin(n.animT * 1.3) * 0.4 * dt;
+        if (d.t <= 0) { d.state = 'trot'; pickSpot(); d.t = 3 + Math.random() * 3; }
+      } else if (d.state === 'sit') {
+        pitchTarget = 0.3; headTarget = 0.36;
+        if (d.t <= 0) { d.state = 'trot'; pickSpot(); d.t = 3 + Math.random() * 3; }
+      } else if (d.state === 'visit') {
+        // at your table: sits, faces you, waits with the patience of her kind
+        pitchTarget = 0.3; headTarget = 0.36;
+        if (playerPos) faceToward(playerPos.x - pos.x, playerPos.z - pos.z, 3);
+      }
+
+      d.pitch += (pitchTarget - d.pitch) * Math.min(1, dt * 5);
+      d.headY += (headTarget - d.headY) * Math.min(1, dt * 6);
+      n.group.rotation.z = d.pitch;                       // nose up when sitting
+      n.group.rotation.x = waddle ? Math.sin(n.animT * bobF) * waddle : 0;
+      pos.y = (bobA ? Math.abs(Math.sin(n.animT * bobF)) * bobA : 0) - d.pitch * 0.06;
+      ud.head.position.y = d.headY + (bobA ? Math.sin(n.animT * bobF + 1) * 0.014 : 0);
+      ud.head.rotation.z = d.state === 'sniff' ? -0.28 : Math.sin(n.animT * 2.2) * 0.1;
+
+      if (n.bubble && (n.bubble.t -= dt) <= 0) n.bubble = null;
+      continue;
+    }
+
     // patrol movement
     if (n.patrol && !n.frozen) {
       const target = n.approach ?? n.patrol[n.wp];
@@ -818,11 +910,6 @@ export function animatePeople(people, dt, t, playerPos, celebrating) {
         const bs = (n.animT * 0.8) % 5.1 < 0.12 ? 0.12 : 1;
         ud.eyeL.scale.y = bs; ud.eyeR.scale.y = bs;
       }
-    }
-
-    if (n.id === 'trudy') {
-      n.group.position.y = Math.abs(Math.sin(n.animT * 9)) * 0.03;
-      n.group.userData.head.rotation.z = Math.sin(n.animT * 2.2) * 0.12;
     }
 
     if (n.bubble && (n.bubble.t -= dt) <= 0) n.bubble = null;
