@@ -1,6 +1,6 @@
 // The cafe itself: geometry, colliders, seats, props.
-import * as THREE from '../vendor/three.module.min.js?v=16';
-import * as T from './textures.js?v=16';
+import * as THREE from '../vendor/three.module.min.js?v=17';
+import * as T from './textures.js?v=17';
 
 export const ROOM = { x0: 0, x1: 25, z0: 0, z1: 10.5, h: 3.5 };
 

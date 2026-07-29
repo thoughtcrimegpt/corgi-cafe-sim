@@ -1,11 +1,11 @@
 // CORGI CAFE SIMULATOR — 9 Claude Ln, 24/7.
 // Unofficial fan parody. Menu prices are real; everything else is a joke.
-import * as THREE from '../vendor/three.module.min.js?v=16';
-import { drawCorgi } from './textures.js?v=16';
-import { PHRASES, HANDLE_RE, fetchNotes, pinNote } from './wall.js?v=16';
-import { buildCafe, ROOM } from './world.js?v=16';
-import { buildPeople, animatePeople, DIALOGUE, say } from './people.js?v=16';
-import { MENU, ADDONS, priceOf, rollHelloWorld } from './menu.js?v=16';
+import * as THREE from '../vendor/three.module.min.js?v=17';
+import { drawCorgi } from './textures.js?v=17';
+import { PHRASES, HANDLE_RE, fetchNotes, pinNote } from './wall.js?v=17';
+import { buildCafe, ROOM } from './world.js?v=17';
+import { buildPeople, animatePeople, DIALOGUE, say } from './people.js?v=17';
+import { MENU, ADDONS, priceOf, rollHelloWorld } from './menu.js?v=17';
 
 const CFG = {
   MIN_PER_SEC: 0.85,      // in-game minutes per real second
@@ -98,7 +98,15 @@ function keyCodes(e) {
   if (alias && !out.includes(alias)) out.push(alias);
   return out;
 }
+function typingInField(e) {
+  const t = e.target;
+  return t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' ||
+    t.tagName === 'SELECT' || t.isContentEditable);
+}
 addEventListener('keydown', e => {
+  // typing in a form field (the pin handle, mainly) — the game keeps its
+  // hands off so the letter E can just be the letter E
+  if (typingInField(e)) return;
   const codes = keyCodes(e);
   for (const c of codes) keys[c] = true;
   if (codes.includes('KeyE') || e.code === 'Space') { e.preventDefault(); onAction(); }
@@ -1014,8 +1022,9 @@ function openWall() {
       list.innerHTML = '<div class="wempty">the wall is quiet tonight. finish a shift and be the first.</div>';
       return;
     }
+    // handle charset is DB-constrained to [A-Za-z0-9_]{1,15}, safe in a URL
     list.innerHTML = notes.map(n =>
-      `<div class="wnote"><span class="wh">@${n.handle}</span>` +
+      `<div class="wnote"><a class="wh" href="https://x.com/${n.handle}" target="_blank" rel="noopener noreferrer">@${n.handle} ↗</a>` +
       `<div class="wp">“${PHRASES[n.phrase] ?? '…'}”</div>` +
       `<div class="ws">${noteStat(n)}</div></div>`
     ).join('');

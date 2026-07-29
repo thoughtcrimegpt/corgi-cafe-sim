@@ -208,7 +208,9 @@
     flex-direction:column;gap:9px;}
   .wnote{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);
     border-radius:11px;padding:11px 15px;}
-  .wnote .wh{color:var(--o2);font-weight:800;font-size:13.5px;letter-spacing:.4px;}
+  .wnote .wh{color:var(--o2);font-weight:800;font-size:13.5px;letter-spacing:.4px;
+    text-decoration:none;}
+  .wnote a.wh:hover{text-decoration:underline;}
   .wnote .wp{font-size:15px;margin:5px 0 6px;line-height:1.45;}
   .wnote .ws{font-size:11.5px;opacity:.5;font-family:ui-monospace,Consolas,monospace;
     letter-spacing:.6px;}
@@ -376,7 +378,7 @@
 
 <div class="flash" id="flash"></div>
 
-<script type="module" src="./src/main.js?v=16"></script>
+<script type="module" src="./src/main.js?v=17"></script>
 <script>
 // analytics — only on the deployed site, so local dev never counts itself
 if (location.hostname.endsWith("github.io")) {
