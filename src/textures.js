@@ -145,45 +145,58 @@ export function bladeSignTexture() {
 }
 
 /* ------------------------------------------------------------ menu board --- */
-export function menuBoardTexture(sections) {
+// A hero board, not the whole menu — the game renders at 328p, so every line
+// here is sized to survive that. The full menu lives in the order screen.
+export function menuBoardTexture() {
   const c = cv(1024, 1024), g = c.getContext('2d');
   g.fillStyle = '#1b1512'; g.fillRect(0, 0, 1024, 1024);
-  g.strokeStyle = PAL.orangeL; g.lineWidth = 8;
-  g.strokeRect(14, 14, 996, 996);
+  g.strokeStyle = PAL.orangeL; g.lineWidth = 10;
+  g.strokeRect(16, 16, 992, 992);
 
   g.fillStyle = PAL.orangeL;
   g.textAlign = 'center';
-  g.font = 'bold 60px Helvetica, Arial, sans-serif';
-  g.fillText('MENU', 512, 92);
+  g.font = 'bold 96px Helvetica, Arial, sans-serif';
+  g.fillText('MENU', 512, 128);
 
-  const COL_W = 410, LINE = 30;
-  let x = 56, y = 158, col = 0;
-  const nextCol = () => { col++; x = 56 + col * 470; y = 158; };
-  g.textAlign = 'left';
-  for (const sec of sections) {
-    // keep a header with at least three of its items
-    if (y + LINE * Math.min(3, sec.items.length) + 60 > 990) nextCol();
+  const line = (txt, price, x, y, w) => {
+    g.textAlign = 'left';
+    g.fillStyle = '#f6efe6';
+    g.font = 'bold 44px Helvetica, Arial, sans-serif';
+    g.fillText(txt, x, y);
+    g.textAlign = 'right';
     g.fillStyle = PAL.orangeL;
-    g.font = 'bold 30px Helvetica, Arial, sans-serif';
-    g.fillText(sec.name.toUpperCase(), x, y);
-    y += 12;
-    g.strokeStyle = 'rgba(242,107,63,0.5)'; g.lineWidth = 2;
-    g.beginPath(); g.moveTo(x, y); g.lineTo(x + COL_W, y); g.stroke();
-    y += 30;
-    for (const it of sec.items) {
-      if (y > 990) nextCol();
-      g.fillStyle = '#f4ece4';
-      g.font = '23px Helvetica, Arial, sans-serif';
-      g.fillText(it.name.length > 24 ? it.name.slice(0, 23) + '…' : it.name, x, y);
-      g.fillStyle = PAL.orangeL;
-      g.textAlign = 'right';
-      g.font = '22px Helvetica, Arial, sans-serif';
-      g.fillText(it.hi ? `${it.price.toFixed(2)}–${it.hi.toFixed(2)}` : '$' + it.price.toFixed(2), x + COL_W, y);
-      g.textAlign = 'left';
-      y += LINE;
-    }
-    y += 20;
-  }
+    g.font = 'bold 44px Helvetica, Arial, sans-serif';
+    g.fillText(price, x + w, y);
+  };
+
+  const L = 66, R = 546, W = 412;
+  let y = 262;
+  g.fillStyle = PAL.orangeL; g.textAlign = 'left';
+  g.font = 'bold 40px Helvetica, Arial, sans-serif';
+  g.fillText('COFFEE', L, y - 46);
+  line('ESPRESSO', '3.25', L, y + 26, W); y += 96;
+  line('LATTE', '6.00', L, y + 26, W); y += 96;
+  line('MOCHA', '6.50', L, y + 26, W); y += 96;
+  line('COLD BREW', '5.50', L, y + 26, W); y += 96;
+  line('CHAI LATTE', '5.30', L, y + 26, W); y += 96;
+
+  y = 262;
+  g.fillStyle = PAL.orangeL;
+  g.font = 'bold 40px Helvetica, Arial, sans-serif';
+  g.fillText('THE EXCLUSIVES', R, y - 46);
+  line('ELEVENLATTE', '5.80', R, y + 26, W); y += 96;
+  line('BREXSPRESSO', '7.50', R, y + 26, W); y += 96;
+  line('THE PENTAGON', '14', R, y + 26, W); y += 96;
+  line('SMOOTHIES', '14', R, y + 26, W); y += 96;
+  line('CROISSANT', '5.25', R, y + 26, W); y += 96;
+
+  // footer strip
+  g.fillStyle = PAL.orange;
+  g.fillRect(16, 900, 992, 108);
+  g.fillStyle = '#fff';
+  g.textAlign = 'center';
+  g.font = 'bold 44px Helvetica, Arial, sans-serif';
+  g.fillText('FULL MENU AT THE COUNTER · YC ALUMNI 20% OFF', 512, 966);
   return tex(c);
 }
 
@@ -203,19 +216,19 @@ export function trudyPosterTexture() {
   g.restore();
 
   g.fillStyle = PAL.ink;
-  g.font = 'bold 46px Helvetica, Arial, sans-serif';
-  g.fillText('Trudy, 2', 48, 428);
-  g.font = '24px Helvetica, Arial, sans-serif';
-  g.fillStyle = '#5b5049';
+  g.font = 'bold 64px Helvetica, Arial, sans-serif';
+  g.fillText('Trudy, 2', 48, 442);
+  g.font = 'bold 34px Helvetica, Arial, sans-serif';
+  g.fillStyle = '#4c423a';
   const lines = [
-    'Chief Morale Officer. Lives upstairs.',
-    'Does not do meet-and-greets.',
-    'Please stop asking the baristas',
-    'where the corgis are.',
+    'Chief Morale Officer.',
+    'Lives upstairs.',
+    'No meet-and-greets.',
     '',
-    'There are no corgis in the cafe.',
+    'There are no corgis',
+    'in the cafe.',
   ];
-  lines.forEach((t, i) => g.fillText(t, 48, 480 + i * 36));
+  lines.forEach((t, i) => g.fillText(t, 48, 496 + i * 40));
   return tex(c);
 }
 
@@ -224,11 +237,11 @@ export function noticeTexture(title, body) {
   g.fillStyle = '#fbf6f0'; g.fillRect(0, 0, 512, 384);
   g.strokeStyle = '#ddd0c2'; g.lineWidth = 6; g.strokeRect(8, 8, 496, 368);
   g.fillStyle = PAL.orange;
-  g.font = 'bold 40px Helvetica, Arial, sans-serif';
-  g.fillText(title, 34, 78);
-  g.fillStyle = '#4a423c';
-  g.font = '26px Helvetica, Arial, sans-serif';
-  body.forEach((t, i) => g.fillText(t, 34, 140 + i * 40));
+  g.font = 'bold 52px Helvetica, Arial, sans-serif';
+  g.fillText(title, 30, 84);
+  g.fillStyle = '#453c35';
+  g.font = 'bold 34px Helvetica, Arial, sans-serif';
+  body.forEach((t, i) => g.fillText(t, 30, 156 + i * 52));
   return tex(c);
 }
 
@@ -277,19 +290,190 @@ export function muralTexture() {
 /* ------------------------------------------------------------ cup boxes ---- */
 export function cupBoxTexture() {
   const c = cv(512, 512), g = c.getContext('2d');
-  g.fillStyle = '#cbb characters'.slice(0, 0) || '#c9b394'; g.fillRect(0, 0, 512, 512);
-  g.fillStyle = 'rgba(0,0,0,0.06)';
+  g.fillStyle = '#c9b394'; g.fillRect(0, 0, 512, 512);
+  g.fillStyle = 'rgba(0,0,0,0.05)';
   for (let i = 0; i < 512; i += 8) g.fillRect(0, i, 512, 2);
-  g.fillStyle = '#3a3129';
-  g.font = 'bold 40px Helvetica, Arial, sans-serif';
+  g.fillStyle = '#2e2620';
+  g.font = 'bold 58px Helvetica, Arial, sans-serif';
   g.textAlign = 'center';
-  g.fillText('CLEAR PET', 256, 150);
-  g.fillText('COLD DRINK CUPS', 256, 198);
-  g.strokeStyle = '#3a3129'; g.lineWidth = 5;
-  g.strokeRect(196, 240, 120, 150);
-  g.beginPath(); g.moveTo(206, 250); g.lineTo(226, 380); g.lineTo(286, 380); g.lineTo(306, 250); g.stroke();
+  g.fillText('CLEAR PET', 256, 120);
+  g.font = 'bold 52px Helvetica, Arial, sans-serif';
+  g.fillText('COLD CUPS', 256, 184);
+  g.strokeStyle = '#2e2620'; g.lineWidth = 8;
+  g.beginPath(); g.moveTo(206, 240); g.lineTo(228, 380); g.lineTo(284, 380); g.lineTo(306, 240); g.closePath(); g.stroke();
+  g.font = 'bold 46px Helvetica, Arial, sans-serif';
+  g.fillText('1000 ct', 256, 456);
+  return tex(c);
+}
+
+/* -------------------------------------------------- corgis with careers ---- */
+// Riff on the site's corgi-in-professional-roles footer illustrations.
+export function jobPosterTexture(role) {
+  const c = cv(512, 640), g = c.getContext('2d');
+  const bgs = ['#f6ecdf', '#e8552f', '#2b3a52', '#f0dfc8'];
+  const fgs = ['#e8552f', '#fdf9f4', '#f6b73c', '#3a6b46'];
+  g.fillStyle = bgs[role % 4]; g.fillRect(0, 0, 512, 640);
+  const fg = fgs[role % 4];
+
+  drawCorgi(g, 290, 300, 1.9, fg);
+
+  g.fillStyle = fg;
+  if (role === 0) {
+    // THE BUILDER — laptop under the snout
+    g.fillRect(90, 330, 150, 14);
+    g.save(); g.translate(96, 330); g.rotate(-0.5); g.fillRect(0, -96, 130, 10); g.restore();
+    g.fillRect(96, 236, 4, 96);
+  } else if (role === 1) {
+    // THE FOUNDER — a tie
+    g.beginPath(); g.moveTo(178, 268); g.lineTo(206, 300); g.lineTo(178, 380); g.lineTo(152, 300); g.closePath(); g.fill();
+  } else if (role === 2) {
+    // THE CHEF — a hat
+    g.beginPath(); g.ellipse(160, 158, 62, 40, -0.1, 0, Math.PI * 2); g.fill();
+    g.fillRect(112, 160, 96, 44);
+  } else {
+    // THE DOCTOR — stethoscope
+    g.strokeStyle = fg; g.lineWidth = 9;
+    g.beginPath(); g.arc(210, 372, 46, -0.4, 2.4); g.stroke();
+    g.beginPath(); g.arc(258, 408, 16, 0, Math.PI * 2); g.fill();
+  }
+
+  g.fillStyle = role === 1 || role === 2 ? '#fdf9f4' : '#2e2620';
+  g.textAlign = 'center';
+  g.font = 'bold 64px Helvetica, Arial, sans-serif';
+  g.fillText(['THE BUILDER', 'THE FOUNDER', 'THE CHEF', 'THE DOCTOR'][role % 4], 256, 520);
   g.font = 'bold 30px Helvetica, Arial, sans-serif';
-  g.fillText('1000 ct', 256, 440);
+  g.globalAlpha = 0.75;
+  g.fillText('CORGI CAFE · EST 2025', 256, 586);
+  g.globalAlpha = 1;
+  return tex(c);
+}
+
+// The site's line, big enough to read across the room.
+export function taglineTexture() {
+  const c = cv(2048, 512), g = c.getContext('2d');
+  g.fillStyle = PAL.orange; g.fillRect(0, 0, 2048, 512);
+  g.fillStyle = '#fdf9f4';
+  g.textAlign = 'center';
+  g.font = 'bold 120px Helvetica, Arial, sans-serif';
+  g.fillText("THE WORLD'S GREATEST WORK", 1024, 200);
+  g.fillText("DOESN'T STOP @ 5:00", 1024, 348);
+  g.font = 'bold 52px Helvetica, Arial, sans-serif';
+  g.globalAlpha = 0.8;
+  g.fillText('— A CAFE OPEN 24/7 FOR THE BUILDERS —', 1024, 452);
+  g.globalAlpha = 1;
+  return tex(c);
+}
+
+export function smoothiePosterTexture() {
+  const c = cv(512, 700), g = c.getContext('2d');
+  g.fillStyle = '#fdf6ec'; g.fillRect(0, 0, 512, 700);
+  g.fillStyle = PAL.orange;
+  g.fillRect(0, 0, 512, 96);
+  g.fillStyle = '#fff';
+  g.textAlign = 'center';
+  g.font = 'bold 52px Helvetica, Arial, sans-serif';
+  g.fillText('CORGI SMOOTHIES', 256, 64);
+
+  const cups = [
+    ['THE FIDI', '#6b4a2f'], ['OCEAN BEACH', '#3f74c9'],
+    ['THE SUNSET', '#d95c8a'], ['HAYES VALLEY', '#5f9a4a'],
+  ];
+  cups.forEach(([nm, col], i) => {
+    const x = 128 + (i % 2) * 256, y = 210 + Math.floor(i / 2) * 240;
+    g.fillStyle = col;
+    g.beginPath();
+    g.moveTo(x - 52, y - 62); g.lineTo(x + 52, y - 62);
+    g.lineTo(x + 38, y + 66); g.lineTo(x - 38, y + 66);
+    g.closePath(); g.fill();
+    // straw + lid
+    g.fillStyle = '#2e2620';
+    g.fillRect(x - 58, y - 74, 116, 12);
+    g.save(); g.translate(x + 8, y - 74); g.rotate(-0.22); g.fillRect(0, -58, 12, 58); g.restore();
+    g.fillStyle = '#2e2620';
+    g.font = 'bold 30px Helvetica, Arial, sans-serif';
+    g.fillText(nm, x, y + 112);
+  });
+
+  g.fillStyle = PAL.orange;
+  g.font = 'bold 40px Helvetica, Arial, sans-serif';
+  g.fillText('41g PROTEIN · $14', 256, 660);
+  return tex(c);
+}
+
+/* ------------------------------------------------------------ paw prints --- */
+export function pawTrailTexture() {
+  const c = cv(256, 1024), g = c.getContext('2d');
+  g.clearRect(0, 0, 256, 1024);
+  g.fillStyle = 'rgba(122,86,52,0.42)';
+  const paw = (x, y, a, s) => {
+    g.save(); g.translate(x, y); g.rotate(a); g.scale(s, s);
+    g.beginPath(); g.ellipse(0, 8, 13, 16, 0, 0, Math.PI * 2); g.fill();
+    for (const [tx, ty] of [[-12, -12], [0, -18], [12, -12]]) {
+      g.beginPath(); g.arc(tx, ty, 6, 0, Math.PI * 2); g.fill();
+    }
+    g.restore();
+  };
+  const r = rng(51);
+  let y = 40;
+  let phase = 0;
+  while (y < 990) {
+    const wob = Math.sin(phase) * 46;
+    paw(104 + wob, y, Math.sin(phase) * 0.5, 1);
+    paw(152 + wob, y + 34, Math.sin(phase + 0.3) * 0.5, 1);
+    y += 78; phase += 0.55;
+  }
+  return tex(c);
+}
+
+export function doormatTexture() {
+  const c = cv(512, 320), g = c.getContext('2d');
+  g.fillStyle = '#8a4a2b'; g.fillRect(0, 0, 512, 320);
+  g.strokeStyle = '#c98d4c'; g.lineWidth = 14;
+  g.strokeRect(16, 16, 480, 288);
+  g.fillStyle = '#f2d8b8';
+  g.textAlign = 'center';
+  g.font = 'bold 74px Helvetica, Arial, sans-serif';
+  g.fillText('WIPE YOUR', 256, 132);
+  g.fillText('PAWS', 256, 224);
+  // bristle noise
+  g.globalAlpha = 0.12; g.fillStyle = '#000';
+  for (let i = 0; i < 300; i++) g.fillRect(Math.random() * 512, Math.random() * 320, 3, 3);
+  g.globalAlpha = 1;
+  return tex(c);
+}
+
+// Little neon corgi for the window — glows at the street.
+export function neonCorgiTexture() {
+  const c = cv(512, 384), g = c.getContext('2d');
+  g.clearRect(0, 0, 512, 384);
+  g.fillStyle = 'rgba(16,10,8,0.88)';
+  g.fillRect(26, 26, 460, 332);
+  g.shadowColor = '#ff9a3d'; g.shadowBlur = 26;
+  g.strokeStyle = '#ffb15c'; g.lineWidth = 10; g.lineJoin = 'round';
+  // outline corgi: body arc, ears, stub tail
+  g.beginPath();
+  g.moveTo(150, 240);
+  g.bezierCurveTo(150, 180, 210, 160, 280, 164);
+  g.lineTo(330, 150);
+  g.lineTo(352, 108);
+  g.lineTo(382, 146);
+  g.lineTo(412, 112);
+  g.lineTo(428, 156);
+  g.bezierCurveTo(438, 190, 420, 232, 380, 244);
+  g.closePath();
+  g.stroke();
+  for (const lx of [190, 240, 340, 388]) {
+    g.beginPath(); g.moveTo(lx, 244); g.lineTo(lx, 288); g.stroke();
+  }
+  g.beginPath(); g.arc(140, 210, 16, 0, Math.PI * 2); g.stroke(); // tail nub
+  g.shadowBlur = 18;
+  g.strokeStyle = '#ff7b3d';
+  g.font = 'bold 56px Helvetica, Arial, sans-serif';
+  g.textAlign = 'center';
+  g.shadowColor = '#ff6a2a';
+  g.fillStyle = '#ffd9a8';
+  g.fillText('OPEN 24/7', 288, 330);
+  g.shadowBlur = 0;
   return tex(c);
 }
 

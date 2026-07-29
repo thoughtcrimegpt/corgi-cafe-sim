@@ -282,6 +282,16 @@ export const DIALOGUE = {
       "you want the espresso. everyone at this hour wants the espresso and then orders a mocha.",
       "first one's on the house. wire in.",
     ],
+    choice: {
+      prompt: 'so. you ordering, or just standing there being pre-revenue?',
+      options: [
+        { label: 'ORDER SOMETHING', tag: 'order' },
+        { label: 'JUST TALKING', tag: 'talk' },
+      ],
+    },
+    after: {
+      talk: ["that's fine. the door never closes. neither do i."],
+    },
     repeat: [
       ["still here."],
       ["the machine's hot. it's always hot."],
@@ -332,7 +342,7 @@ export const DIALOGUE = {
 
   squirtle: {
     name: 'SQUIRTLE',
-    sub: 'tpot',
+    sub: 'posting through it',
     color: '#9fd8ff',
     intro: [
       "BREAKING: local man enters cafe at 3am, tells himself it was a choice.",
@@ -623,8 +633,44 @@ export function buildPeople(scene, world) {
 }
 
 /* ------------------------------------------------------------ animation --- */
-export function animatePeople(people, dt, t, playerPos) {
+export function animatePeople(people, dt, t, playerPos, celebrating) {
   const { npcs, ambient } = people;
+
+  // when someone ships, the whole cafe gets up
+  if (celebrating) {
+    for (const n of npcs) {
+      n.animT += dt;
+      const ud = n.group.userData;
+      if (n.id === 'trudy') {
+        if (!n.hidden) {
+          // zoomies
+          n.group.rotation.y += dt * 7;
+          n.group.position.y = Math.abs(Math.sin(n.animT * 13)) * 0.14;
+        }
+        continue;
+      }
+      if (n.id === 'frogu') {
+        n.group.position.y = 2.47 + Math.abs(Math.sin(n.animT * 8)) * 0.1;
+        continue;
+      }
+      if (ud && ud.armL) {
+        ud.armL.rotation.x = -2.7 + Math.sin(n.animT * 9) * 0.25;
+        ud.armR.rotation.x = -2.7 + Math.sin(n.animT * 9 + 1.2) * 0.25;
+        n.group.position.y = Math.abs(Math.sin(n.animT * 6 + n.home.x)) * 0.1;
+      }
+      if (n.bubble && (n.bubble.t -= dt) <= 0) n.bubble = null;
+    }
+    for (const a of ambient) {
+      a.animT += dt;
+      const ud = a.group.userData;
+      ud.armL.rotation.x = -2.7 + Math.sin(a.animT * 9) * 0.3;
+      ud.armR.rotation.x = -2.7 + Math.sin(a.animT * 9 + 1.4) * 0.3;
+      ud.head.rotation.x = -0.12;
+      a.group.position.y = 0.02 + Math.abs(Math.sin(a.animT * 6 + a.blinkOff * 3)) * 0.09;
+      if (a.bubble && (a.bubble.t -= dt) <= 0) a.bubble = null;
+    }
+    return;
+  }
 
   for (const n of npcs) {
     n.animT += dt;

@@ -1,7 +1,6 @@
 // The cafe itself: geometry, colliders, seats, props.
 import * as THREE from '../vendor/three.module.min.js';
 import * as T from './textures.js';
-import { MENU } from './menu.js';
 
 export const ROOM = { x0: 0, x1: 25, z0: 0, z1: 10.5, h: 3.5 };
 
@@ -265,7 +264,7 @@ export function buildCafe(scene) {
 
   const menuBoard = new THREE.Mesh(
     new THREE.PlaneGeometry(5.6, 2.0),
-    new THREE.MeshBasicMaterial({ map: T.menuBoardTexture(MENU) })
+    new THREE.MeshBasicMaterial({ map: T.menuBoardTexture() })
   );
   menuBoard.position.set(20.6, 2.5, 10.32);
   menuBoard.rotation.y = Math.PI;
@@ -307,17 +306,69 @@ export function buildCafe(scene) {
   box(12.6, 0.06, 0.2, mat('rail2', { color: C.wood2 }), 8.8, 1.72, 10.33);
   collide(8.8, 10.1, 12.4, 0.85);
 
-  // framed prints on the back wall
+  // framed corgi career posters on the back wall (a riff on the site's footer corgis)
   [3.6, 6.6, 9.8, 13.0].forEach((x, i) => {
-    const fr = box(1.02, 0.78, 0.05, mat('frame' + i, { color: i % 2 ? 0x2a2320 : 0xd8cabb }), x, 2.4, 10.31);
+    box(0.86, 1.06, 0.05, mat('frame' + i, { color: i % 2 ? 0x2a2320 : 0xd8cabb }), x, 2.35, 10.31);
     const art = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.9, 0.66),
-      new THREE.MeshBasicMaterial({ map: T.artTexture(i) })
+      new THREE.PlaneGeometry(0.76, 0.95),
+      new THREE.MeshBasicMaterial({ map: T.jobPosterTexture(i) })
     );
-    art.position.set(x, 2.4, 10.27);
+    art.position.set(x, 2.35, 10.27);
     art.rotation.y = Math.PI;
     root.add(art);
   });
+
+  // the tagline, painted big on the east wall
+  const tagline = new THREE.Mesh(
+    new THREE.PlaneGeometry(6.8, 1.7),
+    new THREE.MeshBasicMaterial({ map: T.taglineTexture() })
+  );
+  tagline.rotation.y = -Math.PI / 2;
+  tagline.position.set(24.83, 2.3, 4.6);
+  root.add(tagline);
+
+  // smoothie poster beside the menu board
+  const smoothie = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.98, 1.34),
+    new THREE.MeshBasicMaterial({ map: T.smoothiePosterTexture() })
+  );
+  smoothie.rotation.y = Math.PI;
+  smoothie.position.set(16.6, 2.3, 10.31);
+  root.add(smoothie);
+
+  // paw prints wandering in from the door — nobody has ever seen the dog down here
+  const pawMat = new THREE.MeshBasicMaterial({ map: T.pawTrailTexture(), transparent: true, depthWrite: false });
+  const paw1 = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 4.2), pawMat);
+  paw1.rotation.x = -Math.PI / 2;
+  paw1.rotation.z = Math.PI / 2;
+  paw1.position.set(3.6, 0.012, 5.15);
+  root.add(paw1);
+  const paw2 = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 3.4), pawMat);
+  paw2.rotation.x = -Math.PI / 2;
+  paw2.rotation.z = Math.PI * 0.72;
+  paw2.position.set(7.2, 0.012, 6.3);
+  root.add(paw2);
+
+  // doormat
+  const matD = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.5, 0.94),
+    new THREE.MeshLambertMaterial({ map: T.doormatTexture() })
+  );
+  matD.rotation.x = -Math.PI / 2;
+  matD.rotation.z = Math.PI / 2;
+  matD.position.set(1.05, 0.011, 5.4);
+  root.add(matD);
+
+  // neon corgi glowing in the window bay by the door
+  const neonC = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.2, 0.9),
+    new THREE.MeshBasicMaterial({ map: T.neonCorgiTexture(), transparent: true, side: THREE.DoubleSide })
+  );
+  neonC.position.set(5.9, 1.85, 0.16);
+  root.add(neonC);
+  const neonCGlow = new THREE.PointLight(0xff9a4a, 1.1, 6, 2);
+  neonCGlow.position.set(5.9, 1.85, 0.8);
+  scene.add(neonCGlow);
 
   // the clock — it is always 24/7 o'clock
   const clockBody = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.07, 24), mat('clockb', { color: 0x2a2320 }));

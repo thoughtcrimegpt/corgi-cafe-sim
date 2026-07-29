@@ -9,7 +9,7 @@ const CFG = {
   MIN_PER_SEC: 0.85,      // in-game minutes per real second
   START_MIN: 2 * 60 + 47, // 2:47 AM
   END_MIN: 6 * 60,        // 6:00 AM
-  SHIP_BASE: 0.62,        // % per second at neutral stats
+  SHIP_BASE: 0.68,        // % per second at neutral stats
   FOC_DRAIN: 1.55,        // focus/sec while coding
   FOC_REGEN: 0.9,         // focus/sec while up and about
   CAF_DECAY: 1.15,
@@ -23,11 +23,12 @@ const CFG = {
 const S = {
   running: false, over: false,
   min: CFG.START_MIN,
-  ship: 0, focus: 70, caf: 0, cash: 60,
-  seated: null, mode: 'play',        // play | dialogue | order | end
+  ship: 0, focus: 70, caf: 0, cash: 40,
+  seated: null, mode: 'play',        // play | dialogue | order | celebrate | end
+  celebrate: false, confetti: null, confettiT: 0,
   buffs: [],                          // {id,name,t,bad}
   ach: new Set(),
-  stats: { drinks: 0, food: 0, spent: 0, peakCaf: 0, met: new Set(), followers: 0, sets: 0, pushups: 0 },
+  stats: { drinks: 0, food: 0, spent: 0, peakCaf: 0, met: new Set(), followers: 0, sets: 0, pushups: 0, receipt: [] },
   pending: null,                      // order in progress
   eventT: 22,
   trudyT: 62,                         // game-minutes until Trudy comes down
@@ -106,7 +107,7 @@ document.addEventListener('pointerlockchange', () => {
 document.addEventListener('pointerlockerror', () => { locked = false; });
 
 document.addEventListener('mousemove', e => {
-  if (!S.running || S.mode !== 'play') return;
+  if (!S.running || (S.mode !== 'play' && S.mode !== 'celebrate')) return;
   let dx = 0, dy = 0;
   if (locked) { dx = e.movementX; dy = e.movementY; }
   else if (dragging) { dx = e.clientX - dragX; dy = e.clientY - dragY; dragX = e.clientX; dragY = e.clientY; }
@@ -222,6 +223,91 @@ function toggleAudio() {
   audioOn = !audioOn;
   if (masterGain) masterGain.gain.value = audioOn ? 0.5 : 0;
   toast(audioOn ? 'sound on' : 'sound off');
+}
+
+/* ------------------------------------------------------- the house music -- */
+// A cozy procedural lofi loop — warm chords, lazy bass, sparse plucks,
+// vinyl crackle. No audio files; it's all synthesized on the fly.
+let musicBus = null, musicTimer = null, musicStep = 0, musicNext = 0;
+const CHORDS = [
+  [174.61, 220.0, 261.63, 329.63],   // Fmaj7
+  [146.83, 174.61, 220.0, 261.63],   // Dm7
+  [116.54, 146.83, 174.61, 220.0],   // Bbmaj7
+  [130.81, 164.81, 196.0, 233.08],   // C7
+];
+const PENTA = [349.23, 392.0, 440.0, 523.25, 587.33, 698.46];
+
+function mnote(freq, t, dur, type, vol, filt) {
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = type; o.frequency.value = freq;
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(vol, t + 0.04);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g);
+  if (filt) { g.connect(filt); } else { g.connect(musicBus); }
+  o.start(t); o.stop(t + dur + 0.05);
+}
+
+function startMusic() {
+  if (!AC || musicTimer) return;
+  musicBus = AC.createGain();
+  musicBus.gain.value = 0.55;
+  const lp = AC.createBiquadFilter();
+  lp.type = 'lowpass'; lp.frequency.value = 2400; lp.Q.value = 0.4;
+  musicBus.connect(lp); lp.connect(masterGain);
+
+  // vinyl crackle bed
+  const len = AC.sampleRate * 2;
+  const cb = AC.createBuffer(1, len, AC.sampleRate);
+  const ch = cb.getChannelData(0);
+  for (let i = 0; i < len; i++) {
+    ch[i] = Math.random() < 0.0007 ? (Math.random() * 2 - 1) * 0.5 : 0;
+  }
+  const crack = AC.createBufferSource();
+  crack.buffer = cb; crack.loop = true;
+  const cg = AC.createGain(); cg.gain.value = 0.16;
+  crack.connect(cg); cg.connect(musicBus);
+  crack.start();
+
+  const EIGHTH = 60 / 76 / 2;          // 76 bpm
+  musicNext = AC.currentTime + 0.1;
+  musicStep = 0;
+
+  musicTimer = setInterval(() => {
+    if (!AC) return;
+    while (musicNext < AC.currentTime + 0.5) {
+      const t = musicNext + (musicStep % 2 === 1 ? 0.055 : 0); // swing
+      const bar = Math.floor(musicStep / 8) % 4;
+      const chord = CHORDS[bar];
+      const inBar = musicStep % 8;
+
+      if (inBar === 0) {
+        // pad
+        for (const f of chord) mnote(f, t, EIGHTH * 7.6, 'triangle', 0.05);
+        // bass an octave down
+        mnote(chord[0] / 2, t, EIGHTH * 3.4, 'sine', 0.16);
+      }
+      if (inBar === 4) mnote(chord[0] / 2, t, EIGHTH * 2.6, 'sine', 0.12);
+      // brush tick on 2 and 4
+      if (inBar === 2 || inBar === 6) {
+        const n = AC.createBufferSource();
+        const nb = AC.createBuffer(1, AC.sampleRate * 0.05, AC.sampleRate);
+        const nd = nb.getChannelData(0);
+        for (let i = 0; i < nd.length; i++) nd[i] = (Math.random() * 2 - 1) * (1 - i / nd.length);
+        n.buffer = nb;
+        const f = AC.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 5200;
+        const ng = AC.createGain(); ng.gain.value = 0.05;
+        n.connect(f); f.connect(ng); ng.connect(musicBus);
+        n.start(t);
+      }
+      // sparse pentatonic pluck
+      if (Math.random() < 0.24 && inBar !== 0) {
+        mnote(PENTA[(Math.random() * PENTA.length) | 0], t, EIGHTH * 1.7, 'triangle', 0.065);
+      }
+      musicNext += EIGHTH;
+      musicStep++;
+    }
+  }, 180);
 }
 
 /* --------------------------------------------------------------- UI --- */
@@ -437,6 +523,10 @@ el('ordergo').onclick = () => {
   const lines = [];
   let prep = 0, units = 0;
   for (const l of cart) {
+    S.stats.receipt.push({
+      n: l.item.name + (l.large && l.item.hi ? ' (LG)' : ''),
+      p: priceOf(l.item, l.large) * l.qty, q: l.qty,
+    });
     for (let n = 0; n < l.qty; n++) {
       let served = l.item;
       if (l.item.special === 'random') {
@@ -451,6 +541,7 @@ el('ordergo').onclick = () => {
       if (l.item.name === 'The Pentagon') ach('THE PENTAGON');
     }
   }
+  addons.forEach(a => S.stats.receipt.push({ n: a.name, p: a.price, q: 1 }));
   if (units >= 4) ach('ORDERED FOR THE TABLE');
   // one barista, several drinks
   prep += Math.max(0, units - 1) * 1.6;
@@ -688,23 +779,29 @@ function talkTo(n) {
   if (!n.talkedTo) {
     n.talkedTo = true;
     if (n.id === 'nico') {
-      openDialogue(n, d.intro, null, null);
       S.caf = Math.min(100, S.caf + 25);
+      S.stats.receipt.push({ n: 'Espresso · on the house', p: 0 });
       ach('THERE ARE NO CORGIS');
       setTimeout(() => toast('free espresso. <b>+25 caffeine</b>'), 400);
       hiss(0.6, 0.08);
-      return;
     }
     openDialogue(n, d.intro, d.choice, tag => resolveChoice(n, tag));
     return;
   }
 
   const pool = d.repeat;
-  openDialogue(n, pool[(Math.random() * pool.length) | 0], null, null);
+  const choice = d.choice && !n.choiceDone ? d.choice : null;
+  openDialogue(n, pool[(Math.random() * pool.length) | 0], choice,
+    choice ? tag => resolveChoice(n, tag) : null);
 }
 
 function resolveChoice(n, tag) {
   const d = DIALOGUE[n.id];
+  if (n.id === 'nico') {
+    if (tag === 'order') { openOrder(); return; }
+    openDialogue(n, d.after.talk);
+    return;
+  }
   if (n.id === 'atlas') {
     if (tag === 'set') {
       ach('DID THE SET');
@@ -725,6 +822,7 @@ function resolveChoice(n, tag) {
     if (tag === 'deeper') {
       if (Math.random() < 0.45) {
         ach('GNOSIS');
+        n.choiceDone = true;   // gnosis strikes once a night
         S.ship = Math.min(100, S.ship + 11);
         toast('<b>GNOSIS.</b> he said one weird thing and now you understand your own bug. +11%');
         setTimeout(() => openDialogue(n, d.after.deeperGood), 260);
@@ -744,6 +842,7 @@ function resolveChoice(n, tag) {
   if (n.id === 'gtm') {
     if (tag === 'take') {
       ach('FULLY INSURED');
+      n.choiceDone = true;
       S.min += 10;
       addBuff('covered', 'COVERED', null);
       S.cash += 6;
@@ -757,6 +856,7 @@ function resolveChoice(n, tag) {
   }
   if (n.id === 'vc') {
     if (tag === 'take') {
+      n.choiceDone = true;
       S.min += 14;
       S.cash += 40;
       S.ship = Math.min(100, S.ship + 2);
@@ -832,14 +932,35 @@ function move(dt) {
   const vx = (fx * -iz + rx * ix) * sp;
   const vz = (fz * -iz + rz * ix) * sp;
 
+  // Move, then push out of anything we clipped — circle-vs-box resolution.
+  // Unlike per-axis blocking, this slides you along furniture instead of
+  // freezing whole directions the moment you brush a table skirt.
+  let px = P.pos.x + vx * dt;
+  let pz = P.pos.z + vz * dt;
   const r = CFG.RADIUS;
-  let nx = P.pos.x + vx * dt;
-  if (!blocked(nx, P.pos.z, r)) P.pos.x = nx;
-  let nz = P.pos.z + vz * dt;
-  if (!blocked(P.pos.x, nz, r)) P.pos.z = nz;
-
-  P.pos.x = Math.max(0.4, Math.min(ROOM.x1 - 0.4, P.pos.x));
-  P.pos.z = Math.max(0.5, Math.min(ROOM.z1 - 0.4, P.pos.z));
+  for (let pass = 0; pass < 2; pass++) {
+    for (const c of collide) {
+      const cx = Math.max(c.x0, Math.min(px, c.x1));
+      const cz = Math.max(c.z0, Math.min(pz, c.z1));
+      const dx = px - cx, dz = pz - cz;
+      const d2 = dx * dx + dz * dz;
+      if (d2 === 0) {
+        // dead-centre inside a box: exit through the nearest face
+        const l = px - c.x0, rt = c.x1 - px, tp = pz - c.z0, bt = c.z1 - pz;
+        const m = Math.min(l, rt, tp, bt);
+        if (m === l) px = c.x0 - r;
+        else if (m === rt) px = c.x1 + r;
+        else if (m === tp) pz = c.z0 - r;
+        else pz = c.z1 + r;
+      } else if (d2 < r * r) {
+        const d = Math.sqrt(d2);
+        px = cx + (dx / d) * r;
+        pz = cz + (dz / d) * r;
+      }
+    }
+  }
+  P.pos.x = Math.max(0.4, Math.min(ROOM.x1 - 0.4, px));
+  P.pos.z = Math.max(0.5, Math.min(ROOM.z1 - 0.4, pz));
 
   const moving = mag > 0.05;
   P.bob += dt * (moving ? 9.5 : 0);
@@ -886,7 +1007,7 @@ function step(now) {
     if (S.seated) {
       const cafM = 0.5 + (S.caf / 100) * 1.5;
       const focM = 0.55 + (S.focus / 100) * 0.75;
-      const jm = hasBuff('jitters') ? 0.72 : 1;
+      const jm = hasBuff('jitters') ? 0.62 : 1;
       const mm = hasBuff('motiv') ? 1.4 : 1;
       S.ship = Math.min(100, S.ship + CFG.SHIP_BASE * cafM * focM * jm * mm * dt);
       const resist = 1 - S.caf / 260 - (hasBuff('protein') ? 0.35 : 0);
@@ -903,6 +1024,10 @@ function step(now) {
     } else {
       S.focus = Math.min(100, S.focus + CFG.FOC_REGEN * dt);
     }
+
+    // cafe flavor: distant cup clinks and the occasional steam wand
+    if (Math.random() < dt * 0.07) blip(1700 + Math.random() * 900, 0.04, 'sine', 0.016);
+    if (Math.random() < dt * 0.018) hiss(0.5, 0.028);
 
     // Trudy comes down partway through the night
     S.trudyT -= dt * CFG.MIN_PER_SEC;
@@ -926,7 +1051,7 @@ function step(now) {
   }
 
   if (S.running && S.mode === 'play') {
-    const moving = S.seated ? false : move(dt);
+    const moving = move(dt);   // handles seated internally (you can still turn)
     if (moving && Math.random() < dt * 3.4) blip(90 + Math.random() * 30, 0.03, 'sine', 0.02);
   }
 
@@ -942,8 +1067,9 @@ function step(now) {
   camera.rotateY(P.yaw);
   camera.rotateX(P.pitch);
 
-  animatePeople(people, dt, t, P.pos);
+  animatePeople(people, dt, t, P.pos, S.celebrate);
   world.tickAir(dt, t);
+  tickConfetti(dt, t);
   updateOverlay();
 
   // face NPC labels + bubbles toward the player (sprites already billboard)
@@ -969,13 +1095,115 @@ function startGame() {
   S.running = true; S.over = false; S.mode = 'play';
   initAudio();
   if (AC && AC.state === 'suspended') AC.resume();
+  startMusic();
   if (!isTouch) renderer.domElement.requestPointerLock();
   toast('2:47 AM. the machine is hot. <b>go.</b>', 3400);
 }
 el('startbtn').onclick = startGame;
 
+/* ------------------------------------------------------- the celebration -- */
+function celebrate() {
+  S.celebrate = true;
+  // confetti burst from the ceiling
+  const N = 520;
+  const pos = new Float32Array(N * 3);
+  const col = new Float32Array(N * 3);
+  const vel = [];
+  const palette = [[0.91, 0.33, 0.18], [1.0, 0.69, 0.36], [0.99, 0.98, 0.96], [0.56, 0.84, 1.0], [0.62, 0.88, 0.54]];
+  for (let i = 0; i < N; i++) {
+    pos[i * 3] = 1 + Math.random() * 23;
+    pos[i * 3 + 1] = 3.1 + Math.random() * 0.8;
+    pos[i * 3 + 2] = 0.6 + Math.random() * 9.4;
+    const c = palette[(Math.random() * palette.length) | 0];
+    col[i * 3] = c[0]; col[i * 3 + 1] = c[1]; col[i * 3 + 2] = c[2];
+    vel.push({ vy: 0.55 + Math.random() * 0.8, ph: Math.random() * 6.28, sw: 0.3 + Math.random() * 0.5 });
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  const pts = new THREE.Points(geo, new THREE.PointsMaterial({
+    size: 0.13, vertexColors: true, depthWrite: false,
+  }));
+  scene.add(pts);
+  S.confetti = { pts, geo, vel };
+  S.confettiT = 6.5;
+
+  // the room reacts
+  const cheers = ['SHIPPED!!', 'LFG', 'ring the bell', 'the machine stays hot', 'clapping. actually clapping.', 'ok that deserves a smoothie'];
+  people.ambient.slice(0, 6).forEach((a, i) => {
+    a.bubble = { text: cheers[i % cheers.length], t: 4.5 };
+  });
+  say(people.nico, 'on the house. all of it. (not all of it.)', 5);
+  if (!people.trudy.hidden) say(people.trudy, '(zoomies)', 4);
+
+  // triumphant little arpeggio
+  [523.25, 659.25, 783.99, 1046.5, 1318.5].forEach((f, i) => {
+    setTimeout(() => blip(f, 0.22, 'triangle', 0.07), i * 105);
+  });
+  setTimeout(() => hiss(1.2, 0.07), 600);
+
+  // light flare
+  world.coveLights.forEach(l => { l.intensity *= 1.8; });
+  world.setDawn(0.85);   // golden light floods in, sunrise or not
+}
+
+function tickConfetti(dt, t) {
+  if (!S.confetti) return;
+  S.confettiT -= dt;
+  const p = S.confetti.geo.attributes.position;
+  const vel = S.confetti.vel;
+  for (let i = 0; i < vel.length; i++) {
+    const v = vel[i];
+    if (p.array[i * 3 + 1] > 0.06) {
+      p.array[i * 3 + 1] -= v.vy * dt;
+      p.array[i * 3] += Math.sin(t * 2.2 + v.ph) * v.sw * dt;
+    }
+  }
+  p.needsUpdate = true;
+  if (S.confettiT <= 0) {
+    scene.remove(S.confetti.pts);
+    S.confetti.geo.dispose();
+    S.confetti = null;
+  }
+}
+
+function receiptHTML(won) {
+  const rows = S.stats.receipt.map(r =>
+    `<div class="rrow"><span>${r.q > 1 ? r.q + '× ' : ''}${r.n}</span><i></i><b>${r.p.toFixed(2)}</b></div>`
+  ).join('') || '<div class="rrow"><span>nothing ordered</span><i></i><b>0.00</b></div>';
+
+  const free = [];
+  if (S.stats.pushups) free.push(`PUSHUPS ×${S.stats.pushups}`);
+  if (S.ach.has('GNOSIS')) free.push('GNOSIS ×1');
+  if (S.ach.has('PET THE DOG')) free.push('DOG ×1');
+  if (S.stats.followers) free.push(`FOLLOWERS +${S.stats.followers}`);
+  if (S.ach.has('FULLY INSURED')) free.push('INSURANCE (bounced one interrupt)');
+
+  return `
+  <div class="receipt">
+    <div class="rlogo">🐕</div>
+    <div class="rhead">CORGI CAFE</div>
+    <div class="rsub">9 CLAUDE LN · SAN FRANCISCO<br>OPEN 24/7 · EST 2025</div>
+    <div class="rtear"></div>
+    <div class="rrow"><span>TIME IN</span><i></i><b>2:47 AM</b></div>
+    <div class="rrow"><span>TIME OUT</span><i></i><b>${fmtClock(S.min).replace(/<[^>]+>/g, '')}</b></div>
+    <div class="rtear"></div>
+    ${rows}
+    <div class="rtear"></div>
+    <div class="rrow rtotal"><span>TOTAL</span><i></i><b>$${S.stats.spent.toFixed(2)}</b></div>
+    ${free.length ? `<div class="rfree">NO CHARGE:<br>${free.join('<br>')}</div>` : ''}
+    <div class="rtear"></div>
+    <div class="rrow rship"><span>SHIPPED</span><i></i><b>${S.ship.toFixed(0)}%</b></div>
+    <div class="rstatus">${won
+      ? 'STATUS: ESCAPED THE PERMANENT<br>UNDERCLASS*<br><span>*for one business day</span>'
+      : 'STATUS: THE SUN CAME UP.<br><span>the cafe does not close. that is the problem.</span>'}</div>
+    <div class="rbarcode"></div>
+    <div class="rfoot">THERE ARE NO CORGIS · THANK YOU</div>
+  </div>`;
+}
+
 function endGame(won) {
-  S.over = true; S.running = false; S.mode = 'end';
+  S.over = true;
   document.exitPointerLock?.();
   ach(won ? 'SHIPPED' : 'SAW THE SUNRISE');
 
@@ -983,27 +1211,23 @@ function endGame(won) {
   f.style.transition = 'opacity .1s'; f.style.opacity = won ? '.85' : '.5';
   setTimeout(() => { f.style.transition = 'opacity 1.1s'; f.style.opacity = '0'; }, 110);
 
-  el('endtitle').textContent = won ? 'SHIPPED' : 'THE SUN CAME UP';
-  el('endtitle').style.color = won ? '#ff7b3d' : '#8fb8ff';
-  el('verdict').textContent = won
-    ? 'You shipped at ' + fmtClock(S.min).replace(/<[^>]+>/g, '') + '. You have escaped the permanent underclass. For roughly one business day.'
-    : 'It is 6:00 AM. You are ' + S.ship.toFixed(0) + '% of the way there and the light is coming through the windows. The cafe does not close. That is the problem.';
+  const showPanel = () => {
+    S.running = false; S.mode = 'end'; S.celebrate = false;
+    el('endtitle').textContent = won ? 'SHIPPED' : 'THE SUN CAME UP';
+    el('endtitle').style.color = won ? '#ff7b3d' : '#8fb8ff';
+    el('receiptwrap').innerHTML = receiptHTML(won);
+    el('achv').innerHTML = [...S.ach].map(a => `<span class="ach">${a}</span>`).join('');
+    el('end').classList.add('on');
+  };
 
-  const st = [
-    ['SHIPPED', S.ship.toFixed(0) + '%'],
-    ['TIME', fmtClock(CFG.START_MIN).replace(/<[^>]+>/g, '') + ' → ' + fmtClock(S.min).replace(/<[^>]+>/g, '')],
-    ['DRINKS', S.stats.drinks],
-    ['SNACKS', S.stats.food],
-    ['SPENT', '$' + S.stats.spent.toFixed(2)],
-    ['PEAK CAFFEINE', Math.round(S.stats.peakCaf)],
-    ['PEOPLE MET', S.stats.met.size],
-    ['PUSHUPS', S.stats.pushups || 0],
-    ['NEW FOLLOWERS', S.stats.followers],
-    ['CORGIS SEEN', S.ach.has('PET THE DOG') ? 1 : 0],
-  ];
-  el('statlist').innerHTML = st.map(([k, v]) => `<div class="stat"><span>${k}</span><b>${v}</b></div>`).join('');
-  el('achv').innerHTML = [...S.ach].map(a => `<span class="ach">${a}</span>`).join('');
-  el('end').classList.add('on');
+  if (won) {
+    // let the room have its moment before the receipt prints
+    S.mode = 'celebrate';
+    celebrate();
+    setTimeout(showPanel, 3200);
+  } else {
+    setTimeout(showPanel, 500);
+  }
 }
 
 function shareText() {

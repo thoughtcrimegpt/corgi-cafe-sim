@@ -31,8 +31,10 @@ On phones: left stick to walk, drag the right side to look, `E` button to intera
   and focus, slower with the jitters.
 - **FOCUS** drains while you work and regenerates while you're up. At zero you stall.
 - **CAFFEINE** decays constantly. Above 86 you get the jitters and lose throughput.
-- **CASH** starts at $60. Menu prices are the real ones.
+- **CASH** starts at $40. Menu prices are the real ones.
 - Ship 100% before 6:00 AM or watch the sun come up through the windows.
+- The regulars can help: one does pushups, one dispenses gnosis, one is a dog.
+- Music and sound are procedural — no audio files, all synthesized live. `M` toggles.
 
 ## Running it locally
 
