@@ -60,6 +60,20 @@
   .buff.bad{background:rgba(60,70,90,.92);}
   .buff.brew{background:rgba(122,82,44,.92);}
 
+  /* your laptop, while seated — the night's work scrolling by */
+  #term{position:fixed;right:16px;top:calc(86px + env(safe-area-inset-top,0px));width:280px;
+    background:rgba(11,13,11,.9);border:1px solid rgba(255,255,255,.13);border-radius:10px;
+    padding:7px 10px 9px;z-index:5;display:none;pointer-events:none;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    box-shadow:0 8px 26px rgba(0,0,0,.5);}
+  #termhead{font-size:9.5px;letter-spacing:1px;opacity:.5;margin-bottom:5px;
+    border-bottom:1px solid rgba(255,255,255,.09);padding-bottom:4px;}
+  #termlines{display:flex;flex-direction:column;gap:2px;}
+  .cline{font-size:10.5px;line-height:1.45;color:#9fd6a5;white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis;}
+  .cline b{color:#6a8a70;font-weight:600;}
+  .cline.dim{opacity:.55;}
+
   /* full-res overlay for in-world text — the 3D scene is pixelated, names are not */
   #labels{position:fixed;inset:0;pointer-events:none;z-index:4;overflow:hidden;}
   .nlabel{position:absolute;transform:translate(-50%,-100%);text-align:center;white-space:nowrap;
@@ -235,6 +249,8 @@
   <div id="tact">E</div>
 </div>
 
+<div id="term"><div id="termhead">~/the-thing — 2 warnings, ignored</div><div id="termlines"></div></div>
+
 <div id="dlg"><div class="box">
   <div id="dlgname"></div>
   <div id="dlgtext"></div>
@@ -284,6 +300,7 @@
   <div id="achv"></div>
   <div style="display:flex;gap:9px;justify-content:center;flex-wrap:wrap;margin:0 20px">
     <button class="btn" id="sharebtn">POST ON X</button>
+    <button class="btn" id="savereceipt">SAVE RECEIPT</button>
     <button class="btn ghost" id="copybtn">COPY RESULT</button>
     <button class="btn ghost" id="againbtn">ANOTHER SHIFT</button>
   </div>
@@ -291,7 +308,7 @@
 
 <div class="flash" id="flash"></div>
 
-<script type="module" src="./src/main.js?v=11"></script>
+<script type="module" src="./src/main.js?v=12"></script>
 <script>
 // analytics — only on the deployed site, so local dev never counts itself
 if (location.hostname.endsWith("github.io")) {

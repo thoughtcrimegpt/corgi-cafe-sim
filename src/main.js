@@ -1,9 +1,10 @@
 // CORGI CAFE SIMULATOR — 9 Claude Ln, 24/7.
 // Unofficial fan parody. Menu prices are real; everything else is a joke.
-import * as THREE from '../vendor/three.module.min.js?v=11';
-import { buildCafe, ROOM } from './world.js?v=11';
-import { buildPeople, animatePeople, DIALOGUE, say } from './people.js?v=11';
-import { MENU, ADDONS, priceOf, rollHelloWorld } from './menu.js?v=11';
+import * as THREE from '../vendor/three.module.min.js?v=12';
+import { drawCorgi } from './textures.js?v=12';
+import { buildCafe, ROOM } from './world.js?v=12';
+import { buildPeople, animatePeople, DIALOGUE, say } from './people.js?v=12';
+import { MENU, ADDONS, priceOf, rollHelloWorld } from './menu.js?v=12';
 
 const CFG = {
   MIN_PER_SEC: 0.85,      // in-game minutes per real second
@@ -30,7 +31,8 @@ const S = {
   sipping: null,                      // {caf, foc, dur, t} — the cup in your hand
   buffs: [],                          // {id,name,t,bad}
   ach: new Set(),
-  stats: { drinks: 0, food: 0, spent: 0, peakCaf: 0, met: new Set(), followers: 0, sets: 0, pushups: 0, receipt: [] },
+  stats: { drinks: 0, food: 0, spent: 0, peakCaf: 0, met: new Set(), followers: 0, sets: 0, pushups: 0, receipt: [], commits: 0 },
+  commitT: 2.2,
   pending: null,                      // order in progress
   eventT: 22,
   trudyT: 62,                         // game-minutes until Trudy comes down
@@ -940,25 +942,218 @@ function resolveChoice(n, tag) {
   }
 }
 
+/* ------------------------------------------------------- the terminal -- */
+// The night's work, visible. Commits land faster the more caffeinated you are.
+const COMMITS = [
+  'fix: remove console.log (14 files)',
+  'feat: the thing (final) (2)',
+  'revert: revert: revert',
+  'wip: do not look at this',
+  'fix: off by one (by two)',
+  'chore: bump deps, pray',
+  'fix: it works locally',
+  'refactor: rename utils to helpers',
+  'refactor: rename helpers to utils',
+  'fix: null check the null check',
+  'feat: dark mode (light mode broken)',
+  'docs: TODO write docs',
+  'fix: race condition (introduced new one)',
+  'test: skip flaky test',
+  'test: skip all tests',
+  'feat: ai integration (an if statement)',
+  'perf: removed a sleep(3000). why was it there',
+  'style: tabs to spaces (civil war)',
+  'fix: works on my machine. shipped my machine',
+  'chore: delete node_modules, feel something',
+  'feat: onboarding, allegedly',
+  'fix: the demo path only',
+];
+const COMMITS_JITTERS = [
+  'fix: typo (again) (again)',
+  'revert: everything since the pentagon',
+  'wip: hands shaking, code compiling',
+];
+const COMMITS_LOW_FOCUS = [
+  'wip: idk',
+  'wip: same file, no changes',
+  'chore: stared at it',
+];
+
+const termEl = () => el('term');
+function pushCommit() {
+  S.stats.commits++;
+  let pool = COMMITS;
+  if (hasBuff('jitters') && Math.random() < 0.4) pool = COMMITS_JITTERS;
+  else if (S.focus < 20 && Math.random() < 0.5) pool = COMMITS_LOW_FOCUS;
+  const msg = pool[(Math.random() * pool.length) | 0];
+  const hash = ((Math.random() * 0xfffffff) | 0).toString(16).padStart(7, '0');
+  const lines = el('termlines');
+  const d = document.createElement('div');
+  d.className = 'cline';
+  d.innerHTML = `<b>${hash}</b> ${msg}`;
+  lines.appendChild(d);
+  while (lines.children.length > 8) lines.removeChild(lines.firstChild);
+  [...lines.children].forEach((c, i) => c.classList.toggle('dim', i < lines.children.length - 3));
+}
+
+function tickTerminal(dt) {
+  const on = S.running && !S.over && S.seated && S.mode === 'play';
+  termEl().style.display = on ? 'block' : 'none';
+  if (!on) return;
+  S.commitT -= dt * (0.55 + (S.caf / 100) * 1.3) * (S.focus > 10 ? 1 : 0.4);
+  if (S.commitT <= 0) {
+    pushCommit();
+    S.commitT = 1.4 + Math.random() * 1.8;
+    if (Math.random() < 0.25) blip(1500 + Math.random() * 400, 0.012, 'square', 0.01);
+  }
+}
+
+/* ----------------------------------------------------- the shift stamp -- */
+// Days since the cafe opened (Feb 13, 2026). The receipt keeps count.
+const shiftNumber = () =>
+  Math.max(1, Math.floor((Date.now() - Date.UTC(2026, 1, 13)) / 86400000));
+
+/* ------------------------------------------------------ receipt as PNG -- */
+function receiptPNG(won) {
+  const rows = [];
+  const R = (l, r, style) => rows.push({ l, r, style });
+  R('TIME IN', '2:47 AM'); R('TIME OUT', fmtClock(S.min).replace(/<[^>]+>/g, ''));
+  R('---');
+  if (S.stats.receipt.length) {
+    S.stats.receipt.forEach(x => R((x.q > 1 ? x.q + '× ' : '') + x.n, x.p.toFixed(2)));
+  } else R('nothing ordered', '0.00');
+  R('---');
+  R('TOTAL', '$' + S.stats.spent.toFixed(2), 'total');
+  if (S.policy) {
+    R('---');
+    R('CLAIMS FILED', String(S.policy.claims));
+    R('PAID OUT', '$' + S.policy.paidOut.toFixed(2));
+    R('LOSS RATIO', Math.round(S.policy.paidOut / Math.max(0.01, S.policy.premium) * 100) + '%');
+  }
+  R('---');
+  R('COMMITS', String(S.stats.commits));
+  R('SHIPPED', S.ship.toFixed(0) + '%', 'ship');
+
+  const W = 640, line = 34, pad = 46;
+  const head = 240, foot = 300;
+  const c = document.createElement('canvas');
+  c.width = W; c.height = head + rows.length * line + foot;
+  const g = c.getContext('2d');
+  g.fillStyle = '#fdf9f0'; g.fillRect(0, 0, W, c.height);
+
+  drawCorgi(g, W / 2 + 30, 74, 0.62, '#e8552f');
+  g.fillStyle = '#2b241e';
+  g.textAlign = 'center';
+  g.font = '800 40px Consolas, Menlo, monospace';
+  g.fillText('CORGI CAFE', W / 2, 148);
+  g.font = '600 19px Consolas, Menlo, monospace';
+  g.fillStyle = '#6b6156';
+  g.fillText('9 CLAUDE LN · SAN FRANCISCO', W / 2, 180);
+  g.fillText(`OPEN 24/7 · SHIFT #${shiftNumber()}`, W / 2, 206);
+
+  let y = head + 8;
+  const dash = () => {
+    g.strokeStyle = '#c9bda9'; g.lineWidth = 3; g.setLineDash([9, 8]);
+    g.beginPath(); g.moveTo(pad, y - 10); g.lineTo(W - pad, y - 10); g.stroke();
+    g.setLineDash([]);
+  };
+  for (const r of rows) {
+    if (r.l === '---') { dash(); y += 14; continue; }
+    const big = r.style === 'ship', bold = big || r.style === 'total';
+    g.font = `${bold ? 800 : 600} ${big ? 30 : 22}px Consolas, Menlo, monospace`;
+    g.fillStyle = big ? '#d94e20' : '#2b241e';
+    g.textAlign = 'left'; g.fillText(r.l, pad, y);
+    g.textAlign = 'right'; g.fillText(r.r, W - pad, y);
+    // dotted leader
+    const lw = g.measureText(r.r).width;
+    g.textAlign = 'left';
+    const start = pad + g.measureText(r.l).width + 12;
+    g.strokeStyle = '#cfc3ac'; g.lineWidth = 2; g.setLineDash([2, 7]);
+    g.beginPath(); g.moveTo(start, y - 6); g.lineTo(W - pad - lw - 12, y - 6); g.stroke();
+    g.setLineDash([]);
+    y += big ? line + 10 : line;
+  }
+
+  y += 8;
+  g.textAlign = 'center';
+  g.font = '800 21px Consolas, Menlo, monospace';
+  g.fillStyle = '#2b241e';
+  if (won) {
+    g.fillText('STATUS: ESCAPED THE PERMANENT', W / 2, y); y += 30;
+    g.fillText('UNDERCLASS*', W / 2, y); y += 26;
+    g.font = '600 16px Consolas, Menlo, monospace';
+    g.fillStyle = '#6b6156';
+    g.fillText('*for one business day', W / 2, y); y += 40;
+  } else {
+    g.fillText('STATUS: THE SUN CAME UP.', W / 2, y); y += 26;
+    g.font = '600 16px Consolas, Menlo, monospace';
+    g.fillStyle = '#6b6156';
+    g.fillText('the cafe never closes. run it back.', W / 2, y); y += 40;
+  }
+  // barcode
+  let bx = pad + 30;
+  g.fillStyle = '#2b241e';
+  while (bx < W - pad - 30) {
+    const w = 2 + (Math.random() * 4 | 0);
+    if (Math.random() > 0.4) g.fillRect(bx, y, w, 44);
+    bx += w + 2 + (Math.random() * 4 | 0);
+  }
+  y += 70;
+  g.font = '600 15px Consolas, Menlo, monospace';
+  g.fillStyle = '#6b6156';
+  g.fillText('THERE ARE NO CORGIS · THANK YOU', W / 2, y);
+
+  // torn bottom edge — punched out to transparency so it reads on any background
+  g.globalCompositeOperation = 'destination-out';
+  g.beginPath();
+  g.moveTo(0, c.height);
+  for (let x = 0; x <= W; x += 16) {
+    g.lineTo(x + 8, c.height - 12);
+    g.lineTo(x + 16, c.height);
+  }
+  g.closePath();
+  g.fill();
+  g.globalCompositeOperation = 'source-over';
+
+  return c.toDataURL('image/png');
+}
+
 /* --------------------------------------------------------- the policy -- */
 // The quote is underwritten off your actual state: caffeine is a surcharge,
 // steady focus is a credit, and your questionnaire answers carry risk loads.
+// The carrier remembers. Last night's loss ratio follows you to renewal.
+const CARRIER_KEY = 'ccs_renewal';
+function carrierHistory() {
+  try { return JSON.parse(localStorage.getItem(CARRIER_KEY) || 'null'); }
+  catch { return null; }
+}
+
 function quotePremium(loads) {
   let p = 6;
   p += S.caf * 0.05;                       // wired is a risk class
   if (hasBuff('jitters')) p += 2;
   if (S.focus > 70) p -= 1;                // demonstrated stability credit
+  const hist = carrierHistory();
+  if (hist) p += hist.lr > 1 ? 2.5 : hist.lr > 0.4 ? 1 : -1.2;
   p += loads;
-  p = Math.max(5, Math.min(16, p));
+  p = Math.max(5, Math.min(18, p));
   return Math.round(p * 10) / 10 + 0.4;    // everything ends in .40. house style.
 }
 
 function runQuote(n, d) {
   let loads = 0;
+  const hist = carrierHistory();
   const ask = (qi) => {
     if (qi < d.quiz.length) {
       const q = d.quiz[qi];
-      openDialogue(n, [], {
+      const opener = qi === 0 && hist
+        ? (hist.lr > 1
+          ? ["welcome back. this is a renewal, and the model remembers last night. you were... expensive."]
+          : hist.claims > 0
+            ? ["welcome back. renewal pricing — the model remembers last night. it mostly forgives."]
+            : ["welcome back. clean history, zero claims. the model likes loyalty almost as much as it likes data."])
+        : [];
+      openDialogue(n, opener, {
         prompt: q.prompt,
         options: q.options.map(o => ({ label: o.label, tag: o.tag })),
       }, tag => {
@@ -974,6 +1169,10 @@ function runQuote(n, d) {
     if (S.caf > 40) parts.push('caffeine surcharge');
     if (hasBuff('jitters')) parts.push('jitters rider');
     if (S.focus > 70) parts.push('stability credit');
+    if (hist) {
+      if (hist.lr > 1) parts.push('claims-history surcharge');
+      else if (hist.claims === 0) { parts.push('no-claims discount'); ach('PREFERRED RISK'); }
+    }
     const why = parts.length ? ` (${parts.join(', ')})` : '';
     openDialogue(n, [
       `ok. the model likes you more than it should. $${prem.toFixed(2)}, single-shift named-peril policy${why}.`,
@@ -1268,6 +1467,7 @@ function step(now) {
   animatePeople(people, dt, t, P.pos, S.celebrate);
   world.tickAir(dt, t);
   tickConfetti(dt, t);
+  tickTerminal(dt);
   updateOverlay();
 
   // face NPC labels + bubbles toward the player (sprites already billboard)
@@ -1392,7 +1592,7 @@ function receiptHTML(won) {
   <div class="receipt">
     <div class="rlogo">🐕</div>
     <div class="rhead">CORGI CAFE</div>
-    <div class="rsub">9 CLAUDE LN · SAN FRANCISCO<br>OPEN 24/7 · EST 2025</div>
+    <div class="rsub">9 CLAUDE LN · SAN FRANCISCO<br>OPEN 24/7 · SHIFT #${shiftNumber()}</div>
     <div class="rtear"></div>
     <div class="rrow"><span>TIME IN</span><i></i><b>2:47 AM</b></div>
     <div class="rrow"><span>TIME OUT</span><i></i><b>${fmtClock(S.min).replace(/<[^>]+>/g, '')}</b></div>
@@ -1403,6 +1603,7 @@ function receiptHTML(won) {
     ${free.length ? `<div class="rfree">NO CHARGE:<br>${free.join('<br>')}</div>` : ''}
     ${policyRows}
     <div class="rtear"></div>
+    <div class="rrow"><span>COMMITS</span><i></i><b>${S.stats.commits}</b></div>
     <div class="rrow rship"><span>SHIPPED</span><i></i><b>${S.ship.toFixed(0)}%</b></div>
     <div class="rstatus">${won
       ? 'STATUS: ESCAPED THE PERMANENT<br>UNDERCLASS*<br><span>*for one business day</span>'
@@ -1414,12 +1615,24 @@ function receiptHTML(won) {
 
 function endGame(won) {
   S.over = true;
+  S.lastWon = won;
   document.exitPointerLock?.();
   ach(won ? 'SHIPPED' : 'SAW THE SUNRISE');
 
   const f = el('flash');
   f.style.transition = 'opacity .1s'; f.style.opacity = won ? '.85' : '.5';
   setTimeout(() => { f.style.transition = 'opacity 1.1s'; f.style.opacity = '0'; }, 110);
+
+  // the carrier files its own paperwork on your way out
+  if (S.policy) {
+    try {
+      localStorage.setItem(CARRIER_KEY, JSON.stringify({
+        claims: S.policy.claims,
+        lr: S.policy.paidOut / Math.max(0.01, S.policy.premium),
+        when: Date.now(),
+      }));
+    } catch { /* private mode: the carrier forgets. lucky you. */ }
+  }
 
   const showPanel = () => {
     S.running = false; S.mode = 'end'; S.celebrate = false;
@@ -1454,6 +1667,13 @@ function shareText() {
   ];
   return lines.join('\n');
 }
+el('savereceipt').onclick = () => {
+  const a = document.createElement('a');
+  a.href = receiptPNG(!!S.lastWon);
+  a.download = `corgi-cafe-receipt-shift-${shiftNumber()}.png`;
+  a.click();
+  toast('receipt saved. post it.');
+};
 el('sharebtn').onclick = () => {
   const url = location.href.split('?')[0];
   const txt = encodeURIComponent(shareText() + '\n\n');
