@@ -1,9 +1,9 @@
 // CORGI CAFE SIMULATOR — 9 Claude Ln, 24/7.
 // Unofficial fan parody. Menu prices are real; everything else is a joke.
-import * as THREE from '../vendor/three.module.min.js?v=8';
-import { buildCafe, ROOM } from './world.js?v=8';
-import { buildPeople, animatePeople, DIALOGUE, say } from './people.js?v=8';
-import { MENU, ADDONS, priceOf, rollHelloWorld } from './menu.js?v=8';
+import * as THREE from '../vendor/three.module.min.js?v=9';
+import { buildCafe, ROOM } from './world.js?v=9';
+import { buildPeople, animatePeople, DIALOGUE, say } from './people.js?v=9';
+import { MENU, ADDONS, priceOf, rollHelloWorld } from './menu.js?v=9';
 
 const CFG = {
   MIN_PER_SEC: 0.85,      // in-game minutes per real second
@@ -929,12 +929,13 @@ function runQuote(n, d) {
     if (S.focus > 70) parts.push('stability credit');
     const why = parts.length ? ` (${parts.join(', ')})` : '';
     openDialogue(n, [
-      `ok. the model likes you more than it should. $${prem.toFixed(2)} for the night${why}.`,
-      'covers the next three bad things that happen to you. claims pay out in about ninety seconds.',
+      `ok. the model likes you more than it should. $${prem.toFixed(2)}, single-shift named-peril policy${why}.`,
+      'form CC-247. effective on bind, expires 6:00 AM. covers three occurrences: interruptions, focus loss, doomscroll events. zero deductible.',
+      'exclusions: acts of dog. claims settle in about ninety seconds.',
     ], {
-      prompt: `$${prem.toFixed(2)}. one night. three claims. yes or no.`,
+      prompt: `$${prem.toFixed(2)}. three occurrences, per-occurrence limit, zero deductible. do we have a binder?`,
       options: [
-        { label: `BIND IT — $${prem.toFixed(2)}`, tag: 'bind' },
+        { label: `BIND COVERAGE — $${prem.toFixed(2)}`, tag: 'bind' },
         { label: 'DECLINE THE QUOTE', tag: 'pass' },
       ],
     }, tag => {
@@ -949,7 +950,7 @@ function runQuote(n, d) {
       S.cash -= prem;
       S.stats.spent += prem;
       S.policy = { premium: prem, claimsLeft: 3, claims: 0, paidOut: 0 };
-      S.stats.receipt.push({ n: 'Founder policy · 1 night', p: prem, q: 1 });
+      S.stats.receipt.push({ n: 'Named-peril policy · CC-247', p: prem, q: 1 });
       n.choiceDone = true;
       ach('FULLY INSURED');
       addBuff('policy', 'INSURED ×3', null);
