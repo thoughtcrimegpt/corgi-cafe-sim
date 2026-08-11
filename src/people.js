@@ -356,7 +356,7 @@ export const DIALOGUE = {
       ["vibecamp changed me. i can't explain it. that part's load-bearing."],
       ["you should log off. i can't. but you should."],
       ["i'm not a doomer. i'm a doomer with good vibes. completely different thing."],
-      ["the terminal by the door is a smaller egregore. hungrier, though. i've watched it feed."],
+      ["the terminal under the tagline is a smaller egregore. hungrier, though. i've watched it feed."],
     ],
   },
 

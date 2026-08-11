@@ -34,9 +34,9 @@ On phones: left stick to walk, drag the right side to look, `E` button to intera
 - **CASH** starts at $40. Menu prices are the real ones.
 - Ship 100% before 6:00 AM or watch the sun come up through the windows.
 - The regulars can help: one dispenses gnosis, one is a dog.
-- The terminal by the door sells Corgi's actual ETFs for play money — real tickers,
-  real fees, real buffer caps, hallucinated 3 AM prices. Positions lock at purchase
-  and settle at 6:00 AM.
+- The terminal on the far wall, under the tagline, sells Corgi's actual ETFs for
+  play money — real tickers, real fees, real buffer caps, hallucinated 3 AM prices.
+  Positions lock at purchase and settle at 6:00 AM.
 - Music and sound are procedural — no audio files, all synthesized live. `M` toggles.
 
 ## Running it locally

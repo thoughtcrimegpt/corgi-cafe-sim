@@ -1,15 +1,15 @@
 // CORGI CAFE SIMULATOR — 9 Claude Ln, 24/7.
 // Unofficial fan parody. Menu prices are real; everything else is a joke.
-import * as THREE from '../vendor/three.module.min.js?v=22';
-import { drawCorgi } from './textures.js?v=22';
-import { PHRASES, HANDLE_RE, fetchNotes, pinNote } from './wall.js?v=22';
-import { buildCafe, ROOM } from './world.js?v=22';
-import { buildPeople, animatePeople, DIALOGUE, say } from './people.js?v=22';
-import { MENU, ADDONS, priceOf, rollHelloWorld } from './menu.js?v=22';
+import * as THREE from '../vendor/three.module.min.js?v=23';
+import { drawCorgi } from './textures.js?v=23';
+import { PHRASES, HANDLE_RE, fetchNotes, pinNote } from './wall.js?v=23';
+import { buildCafe, ROOM } from './world.js?v=23';
+import { buildPeople, animatePeople, DIALOGUE, say } from './people.js?v=23';
+import { MENU, ADDONS, priceOf, rollHelloWorld } from './menu.js?v=23';
 import {
   FUNDS, positions as etfPositions, tick as etfTick, buy as etfBuy,
   investedIn, liveValue, pctChange, settle as etfSettle, capTonight, drawTicker,
-} from './etf.js?v=22';
+} from './etf.js?v=23';
 
 const CFG = {
   MIN_PER_SEC: 0.85,      // in-game minutes per real second
@@ -45,6 +45,7 @@ const S = {
   pending: null,                      // order in progress
   etfSettle: null,                    // set at 6:00, read by the receipt
   etfOpened: false, etfChecked: -99,  // first-open toast; last position check
+  etfHinted: false,                   // the one nudge toward the far wall
   eventT: 22,
   trudyT: 62,                         // game-minutes until Trudy comes down
 };
@@ -1846,6 +1847,10 @@ function step(now) {
     const gdt = sdt * CFG.MIN_PER_SEC * (S.mode === 'play' ? 1 : 0.45);
     S.min += gdt;
     etfTick(gdt, S.caf);   // the market dreams along at clock speed
+    if (!S.etfHinted && !S.etfOpened && S.min >= CFG.START_MIN + 25) {
+      S.etfHinted = true;
+      toast('the green screen under the tagline is new. it is not showing the weather.');
+    }
 
     // order prep
     if (S.pending) {
