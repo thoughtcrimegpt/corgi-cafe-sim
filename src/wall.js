@@ -29,7 +29,7 @@ export const PHRASES = [
   'took the meeting. took the check.',
   'the moat is vibes.',
   'heads down until further notice.',
-  'escaped the permanent underclass (1 day).',
+  'the deadline was real. so was i.',
   'my premium went up and i understand why.',
   'commits: many. progress: unclear.',
   'the 5am crowd knows.',
@@ -39,7 +39,7 @@ export const PHRASES = [
   'left to touch grass. came back.',
   'nico remembered my order.',
   'squirtle told me something true.',
-  'did the set. escaped nothing yet.',
+  'the window seat is undefeated.',
   'the gtm team found me anyway.',
   'adverse selection brought us together.',
   'paid $14 for a smoothie and peace.',
@@ -59,6 +59,10 @@ export const PHRASES = [
   'my cofounder thinks i am asleep.',
   'this counts as networking.',
   'the wifi is a covenant.',
+  'long 2x monster at 3am. felt correct.',
+  'volatility drag knows where i live.',
+  'hit the buffer cap. two cents. framing it.',
+  'the terminal remembers me now.',
 ];
 
 export const HANDLE_RE = /^[A-Za-z0-9_]{1,15}$/;

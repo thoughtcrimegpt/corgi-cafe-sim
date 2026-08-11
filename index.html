@@ -162,6 +162,23 @@
     padding:5px 9px;font-size:11px;font-weight:700;letter-spacing:.5px;flex-shrink:0;}
   .item .add:hover{background:var(--o);color:#fff;}
 
+  /* the terminal */
+  .etfsub{font-size:12.5px;opacity:.78;margin:-2px 22px 2px;line-height:1.5;}
+  .etfsub span{opacity:.55;font-size:11px;}
+  #etfwrap{padding:0 20px 8px;}
+  .fret{font-family:ui-monospace,monospace;font-size:13px;width:72px;text-align:right;flex-shrink:0;}
+  .up{color:#7fdd8a}.dn{color:#ff6f61}
+  .fbuy{background:rgba(255,255,255,.1);border:0;color:#ffb15c;border-radius:7px;
+    padding:5px 8px;font-size:11px;font-weight:700;flex-shrink:0;}
+  .fbuy:hover{background:var(--o);color:#fff;}
+  .fbuy:disabled{opacity:.3;pointer-events:none;}
+  .fnote{font-size:11px;opacity:.5;margin:6px 2px 0;line-height:1.45;}
+  #etfwrap .item{cursor:default;}
+  #etfbar{display:flex;justify-content:space-between;align-items:center;gap:12px;
+    padding:12px 20px 18px;border-top:1px solid rgba(255,255,255,.08);}
+  #etfcash{font-family:ui-monospace,monospace;font-size:17px;}
+  #etfcash span{font-size:11px;opacity:.5;letter-spacing:1px;}
+
   /* title + end */
   #title .card, #end .card{padding:0 0 24px;text-align:center;}
   .bigtitle{font-size:clamp(30px,7vw,58px);font-weight:900;letter-spacing:-1px;line-height:.98;
@@ -315,12 +332,25 @@
   <div id="orderbar">
     <div id="cartbox">
       <div id="cartlist"><span class="empty">tap items to build your order</span></div>
+      <div style="margin-bottom:7px"><span class="chip" id="ycchip" title="honor system. like the real one.">YC ALUM −20%</span></div>
       <div id="ordertotal">$0.00</div>
     </div>
     <div style="display:flex;gap:8px;flex-shrink:0">
       <button class="btn ghost" id="ordercancel">CLOSE</button>
       <button class="btn" id="ordergo">ORDER</button>
     </div>
+  </div>
+</div></div>
+
+<div class="panel" id="etf"><div class="card">
+  <h2>CORGI TERMINAL</h2>
+  <p class="etfsub">the other menu. the market is closed. these are not.<br>
+    <span>tickers, fees and caps are real — each fund a series of corgi etf trust i, file no. 333-289838,
+    listed on cboe bzx. the prices are not. play money — not investment advice.</span></p>
+  <div id="etfwrap"></div>
+  <div id="etfbar">
+    <div id="etfcash">$0.00 <span>ON THE CARD</span></div>
+    <button class="btn ghost" id="etfclose">CLOSE</button>
   </div>
 </div></div>
 
@@ -381,7 +411,7 @@
 
 <div class="flash" id="flash"></div>
 
-<script type="module" src="./src/main.js?v=21"></script>
+<script type="module" src="./src/main.js?v=22"></script>
 <script>
 // analytics — only on the deployed site, so local dev never counts itself
 if (location.hostname.endsWith("github.io")) {

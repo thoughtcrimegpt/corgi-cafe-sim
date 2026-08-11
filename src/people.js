@@ -306,44 +306,11 @@ export const DIALOGUE = {
       ["if you're here at 4am you're building something. that's the whole membership test, and you passed."],
       ["sixty percent of the first thirty people here got the tattoo. i'm not going to explain that."],
       ["the retail space was a required add-on to the office lease. i assumed the landlord made that up. he did not. so: here we are."],
+      ["this was a hair salon until 2019. then nothing, for years. now it's the center of the known universe. real estate is undefeated."],
+      ["if this place ever burns down, you'll find me in it. charred. that's not a threat, it's a lease commitment."],
       ["see the flying corgis by the door? artist residency. real artists, real corgis, real capes. dogpatch location gets the full gallery."],
       ["we gave artists a residency and every single one of them painted the corgis flying. nobody coordinated that. they just knew."],
-    ],
-  },
-
-  atlas: {
-    name: 'ATLAS',
-    sub: 'escaping the permanent underclass',
-    color: '#a8e0b0',
-    intro: [
-      "you've got 'i'll start monday' energy. it's monday.",
-      "the permanent underclass isn't a class. it's a default setting. you get opted in by doing nothing.",
-      "guys in here will argue open weights versus closed weights for six hours and never once pick up a heavy one.",
-    ],
-    choice: {
-      prompt: "twenty. right now. floor's clean. i'll count.",
-      options: [
-        { label: 'DO THE SET', tag: 'set' },
-        { label: 'NOT RIGHT NOW', tag: 'decline' },
-      ],
-    },
-    after: {
-      set: [
-        "good. that's the whole escape hatch. it's just reps. reps in the gym, reps in the repo.",
-        "come on the pod sometime. we'll do it over steaks. bring an opinion you'd defend sober.",
-      ],
-      decline: [
-        "noted. that's going in the episode.",
-      ],
-    },
-    repeat: [
-      ["the smoothie is fourteen dollars and has forty-one grams. staying broke costs more than that and has none."],
-      ["creatine's two bucks at the counter. cheapest edge in this building and nobody takes it."],
-      ["you cannot out-cardio a bad roadmap."],
-      ["sleep is a leverage tool, not a personality. i still don't do it. do as i say."],
-      ["we recorded an episode in this room once. nobody noticed. they were all working. that's the whole episode."],
-      ["nobody's coming. that's the good news. means nobody's stopping you either."],
-      ["still noted."],
+      ["the terminal's real, the funds are real, the espresso is more real. priorities."],
     ],
   },
 
@@ -385,10 +352,11 @@ export const DIALOGUE = {
       ["actuarial tables are just astrology that went to columbia."],
       ["i still call it twitter. it's my last remaining principle."],
       ["the timeline is a slot machine that pays out in identity."],
-      ["everyone's trying to escape the permanent underclass and nobody's asked what class means when the economy is a language model."],
+      ["everyone in here is sprinting somewhere and nobody's asked what class means when the economy is a language model."],
       ["vibecamp changed me. i can't explain it. that part's load-bearing."],
       ["you should log off. i can't. but you should."],
       ["i'm not a doomer. i'm a doomer with good vibes. completely different thing."],
+      ["the terminal by the door is a smaller egregore. hungrier, though. i've watched it feed."],
     ],
   },
 
@@ -449,6 +417,7 @@ export const DIALOGUE = {
       ["i closed two founders between 1 and 3am. the graveyard shift converts."],
       ["you look like you're about to say 'send me a deck'. send me a deck."],
       ["my quota resets at midnight. so does the cafe. we understand each other."],
+      ["d&o, cyber, general liability, ai liability — and since july, trucking, plus a sports line called golden. we've been busy. anyway. ninety seconds."],
     ],
     claimLines: [
       'paid. buy yourself something caffeinated.',
@@ -521,6 +490,7 @@ export const DIALOGUE = {
       ["i'd do a small check. small for me. life-changing for you. isn't that beautiful."],
       ["we're a signal-dense fund. i don't know what that means either but LPs love it."],
       ["an insurance company that opens a cafe to watch founders work. do you understand how good that underwriting data is. i'm not even mad. i'm taking notes."],
+      ["point two zero on the majors. that's not an expense ratio, that's a dare."],
     ],
   },
 
@@ -599,10 +569,6 @@ export function buildPeople(scene, world) {
   apron.position.set(0, 1.02, 0.17);
   nico.group.add(apron);
   nico.fixed = true;
-
-  // ATLAS — by the window, between sets
-  const atlas = mk('atlas', { top: 0x2f4429, skin: SKINS[3], hair: HAIRS[3], bulk: 1.55 }, 6.3, 2.95, -0.55);
-  atlas.anim = 'flex';
 
   // SQUIRTLE — far corner, a small blue turtle at a laptop
   const squirtleG = squirtleFigure();
@@ -710,7 +676,7 @@ export function buildPeople(scene, world) {
     });
   }
 
-  return { root, npcs, ambient, nico, atlas, squirtle, gtm, vc, trudy, frogu: frog };
+  return { root, npcs, ambient, nico, squirtle, gtm, vc, trudy, frogu: frog };
 }
 
 /* ------------------------------------------------------------ animation --- */
@@ -887,13 +853,7 @@ export function animatePeople(people, dt, t, playerPos, celebrating) {
     }
 
     if (ud && ud.armL) {
-      if (n.anim === 'flex') {
-        // Atlas: slow curls, occasional pushup dip
-        const c = Math.sin(n.animT * 1.6);
-        ud.armL.rotation.x = -0.6 - c * 0.7;
-        ud.armR.rotation.x = -0.6 - Math.sin(n.animT * 1.6 + 0.4) * 0.7;
-        n.group.position.y = Math.max(0, Math.sin(n.animT * 0.5) * 0.02);
-      } else if (n.anim === 'type') {
+      if (n.anim === 'type') {
         ud.armL.rotation.x = -1.15 + Math.sin(n.animT * 12) * 0.09;
         ud.armR.rotation.x = -1.15 + Math.sin(n.animT * 12 + 1.9) * 0.09;
         ud.head.position.y = ud.legH + 0.62 + 0.12 + Math.sin(n.animT * 1.4) * 0.008;

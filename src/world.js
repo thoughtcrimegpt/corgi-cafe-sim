@@ -1,6 +1,6 @@
 // The cafe itself: geometry, colliders, seats, props.
-import * as THREE from '../vendor/three.module.min.js?v=21';
-import * as T from './textures.js?v=21';
+import * as THREE from '../vendor/three.module.min.js?v=22';
+import * as T from './textures.js?v=22';
 
 export const ROOM = { x0: 0, x1: 25, z0: 0, z1: 10.5, h: 3.5 };
 
@@ -761,13 +761,28 @@ export function buildCafe(scene) {
   }
   const counterLight = new THREE.PointLight(0xffcf9a, 1.8, 14, 2); counterLight.position.set(20.5, 2.6, 9.0); scene.add(counterLight);
 
+  // the terminal — corgi is also an etf shop now. mounted atm-height on the
+  // east wall under the tagline; the feed is wired up in main.js.
+  box(0.06, 0.8, 1.2, mat('etfframe', { color: 0x14181c }), 24.95, 1.02, 6.3);
+  box(0.07, 0.05, 1.2, mat('etfstripe', { color: 0xe8552f }), 24.94, 0.55, 6.3);
+  const etfScreen = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.06, 0.66),
+    new THREE.MeshBasicMaterial({ color: 0x07100a })
+  );
+  etfScreen.rotation.y = -Math.PI / 2;
+  etfScreen.position.set(24.91, 1.08, 6.3);
+  root.add(etfScreen);
+  const termGlow = new THREE.PointLight(0x59d878, 0.5, 3.2, 2);
+  termGlow.position.set(24.4, 1.2, 6.3);
+  scene.add(termGlow);
+
   // daylight that ramps in at sunrise
   const dawn = new THREE.DirectionalLight(0xffb87a, 0.0);
   dawn.position.set(10, 8, -14);
   scene.add(dawn);
 
   return {
-    root, colliders, seats, props, drawWall,
+    root, colliders, seats, props, drawWall, etfScreen,
     counter: { x0: CX0, x1: CX1, z0: CZ0, z1: CZ1 },
     sky, skyNight, skyDawn, dawn, hemi, amb, coveLights, mural,
     tickAir(dt, t) {

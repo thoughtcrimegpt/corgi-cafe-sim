@@ -1,11 +1,15 @@
 // CORGI CAFE SIMULATOR — 9 Claude Ln, 24/7.
 // Unofficial fan parody. Menu prices are real; everything else is a joke.
-import * as THREE from '../vendor/three.module.min.js?v=21';
-import { drawCorgi } from './textures.js?v=21';
-import { PHRASES, HANDLE_RE, fetchNotes, pinNote } from './wall.js?v=21';
-import { buildCafe, ROOM } from './world.js?v=21';
-import { buildPeople, animatePeople, DIALOGUE, say } from './people.js?v=21';
-import { MENU, ADDONS, priceOf, rollHelloWorld } from './menu.js?v=21';
+import * as THREE from '../vendor/three.module.min.js?v=22';
+import { drawCorgi } from './textures.js?v=22';
+import { PHRASES, HANDLE_RE, fetchNotes, pinNote } from './wall.js?v=22';
+import { buildCafe, ROOM } from './world.js?v=22';
+import { buildPeople, animatePeople, DIALOGUE, say } from './people.js?v=22';
+import { MENU, ADDONS, priceOf, rollHelloWorld } from './menu.js?v=22';
+import {
+  FUNDS, positions as etfPositions, tick as etfTick, buy as etfBuy,
+  investedIn, liveValue, pctChange, settle as etfSettle, capTonight, drawTicker,
+} from './etf.js?v=22';
 
 const CFG = {
   MIN_PER_SEC: 0.85,      // in-game minutes per real second
@@ -36,9 +40,11 @@ const S = {
   trudyVisitAt: 0, trudyPhase: 0, trudyIgnoreT: 0,
   buffs: [],                          // {id,name,t,bad}
   ach: new Set(),
-  stats: { drinks: 0, food: 0, spent: 0, peakCaf: 0, met: new Set(), followers: 0, sets: 0, pushups: 0, receipt: [], commits: 0 },
+  stats: { drinks: 0, food: 0, spent: 0, peakCaf: 0, met: new Set(), followers: 0, receipt: [], commits: 0 },
   commitT: 2.2,
   pending: null,                      // order in progress
+  etfSettle: null,                    // set at 6:00, read by the receipt
+  etfOpened: false, etfChecked: -99,  // first-open toast; last position check
   eventT: 22,
   trudyT: 62,                         // game-minutes until Trudy comes down
 };
@@ -73,6 +79,17 @@ const camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.05, 2
 sizeRenderer();
 const world = buildCafe(scene);
 const people = buildPeople(scene, world);
+
+// the terminal's feed — a little canvas the frame loop redraws every couple
+// of seconds. alive on the title screen too; the market does not wait for you.
+const etfCv = document.createElement('canvas');
+etfCv.width = 256; etfCv.height = 160;
+drawTicker(etfCv);
+const etfTex = new THREE.CanvasTexture(etfCv);
+etfTex.colorSpace = THREE.SRGBColorSpace;
+world.etfScreen.material.map = etfTex;
+world.etfScreen.material.color.set(0xffffff);
+world.etfScreen.material.needsUpdate = true;
 
 addEventListener('resize', sizeRenderer);
 
@@ -140,6 +157,7 @@ addEventListener('keydown', e => {
   if (codes.includes('KeyM')) toggleAudio();
   if (e.code === 'Escape' && S.mode === 'order') closeOrder();
   if (e.code === 'Escape' && S.mode === 'wall') closeWall();
+  if (e.code === 'Escape' && S.mode === 'etf') closeEtf();
 });
 addEventListener('keyup', e => { for (const c of keyCodes(e)) keys[c] = false; });
 // a stuck key across a focus change is worse than a dropped one
@@ -429,10 +447,11 @@ const dropBuff = id => { S.buffs = S.buffs.filter(b => b.id !== id); };
 // every achievement in the game — the title screen keeps count across runs
 const ACH_ALL = [
   'SHIPPED', 'SAW THE SUNRISE', 'THERE ARE NO CORGIS', 'PET THE DOG',
-  'DID THE SET', 'NOTED', 'GNOSIS', 'TOUCHED GRASS', 'FULLY INSURED',
+  'GNOSIS', 'TOUCHED GRASS', 'FULLY INSURED',
   'TOOK THE MEETING', 'THE MOAT IS VIBES', 'HEARD THE THESIS', 'HELLO WORLD',
   '$14 BREAKFAST', 'THE PENTAGON', 'WIRED IN', 'ORDERED FOR THE TABLE',
   'CREATINE', 'LOSS RATIO', 'MORAL HAZARD', 'PREFERRED RISK',
+  'WENT LONG', 'LEVERAGED', 'VOLATILITY DRAG', 'FULLY BUFFERED', 'HIT THE CAP',
 ];
 function achEarned() {
   try { return new Set(JSON.parse(localStorage.getItem('ccs_ach') || '[]')); }
@@ -567,12 +586,15 @@ function renderAddons() {
   });
 }
 
-function orderTotal() {
+// yc alumni really do get 20% off. verification is vibes-based here too.
+let ycAlum = false;
+function orderRaw() {
   let t = 0;
   cart.forEach(l => { t += priceOf(l.item, l.large) * l.qty; });
   ADDONS.forEach(a => { if (selAddons.has(a.id)) t += a.price; });
   return t;
 }
+function orderTotal() { return orderRaw() * (ycAlum ? 0.8 : 1); }
 
 function renderCart() {
   const list = el('cartlist');
@@ -603,8 +625,18 @@ function openOrder() {
   document.exitPointerLock?.();
   cart = []; selAddons.clear();
   buildMenuUI(); renderCart();
+  el('ycchip').classList.toggle('on', ycAlum);
   el('order').classList.add('on');
 }
+el('ycchip').onclick = () => {
+  ycAlum = !ycAlum;
+  el('ycchip').classList.toggle('on', ycAlum);
+  if (ycAlum && !S.ycToasted) {
+    S.ycToasted = true;
+    toast('alum rate applied. we verify nothing. the vibes are the kyc.');
+  }
+  renderCart();
+};
 function closeOrder() {
   el('order').classList.remove('on');
   if (!S.over) S.mode = 'play';
@@ -640,6 +672,7 @@ el('ordergo').onclick = () => {
     }
   }
   addons.forEach(a => S.stats.receipt.push({ n: a.name, p: a.price, q: 1 }));
+  if (ycAlum) S.stats.receipt.push({ n: 'YC ALUM −20%', p: -(orderRaw() * 0.2), q: 1 });
   if (units >= 4) ach('ORDERED FOR THE TABLE');
   // one barista, several drinks
   prep += Math.max(0, units - 1) * 1.6;
@@ -655,6 +688,89 @@ el('ordergo').onclick = () => {
     say(people.nico, units > 2 ? 'all of it? ok. give me a minute.' : prep > 7 ? 'blender. sorry. everyone, sorry.' : 'on it.', 3);
   }
 };
+
+/* ----------------------------------------------------- the terminal --- */
+function renderEtf() {
+  const sec = (title, funds, note) => `
+    <div class="sec"><h3>${title}</h3>
+      ${funds.map(f => {
+        const c = pctChange(f);
+        return `<div class="item">
+          <span class="nm"><b>${f.tk}</b> <span class="tg">${f.name} · ${(f.er * 100).toFixed(2)}%${f.type === 'buf' ? '*' : ''}</span></span>
+          <span class="fret ${c >= 0 ? 'up' : 'dn'}">${c >= 0 ? '+' : ''}${c.toFixed(2)}%</span>
+          <button class="fbuy" data-f="${f.id}" data-a="5">$5</button>
+          <button class="fbuy" data-f="${f.id}" data-a="10">$10</button>
+          <button class="fbuy" data-f="${f.id}" data-a="20">$20</button>
+        </div>`;
+      }).join('')}
+      ${note ? `<div class="fnote">${note}</div>` : ''}
+    </div>`;
+  const lev = FUNDS.filter(f => f.type === 'lev');
+  const buf = FUNDS.filter(f => f.type === 'buf');
+  let pos = '';
+  if (etfPositions.length) {
+    pos = `<div class="sec"><h3>YOUR POSITIONS</h3>` +
+      etfPositions.map(p => {
+        const f = FUNDS.find(x => x.id === p.fid);
+        const v = liveValue(p), d = v - p.amt;
+        return `<div class="item">
+          <span class="nm"><b>${f.tk}</b> <span class="tg">$${p.amt.toFixed(2)} in</span></span>
+          <span class="fret ${d >= 0 ? 'up' : 'dn'}">$${v.toFixed(2)}</span></div>`;
+      }).join('') +
+      `<div class="fnote">locked until the 6:00 AM settlement. liquidity is a distraction.</div></div>`;
+  }
+  el('etfwrap').innerHTML =
+    sec('LEVERAGED — 2x DAILY', lev, 'daily reset. resets you too.') +
+    sec('BUFFERED — JULY SERIES', buf,
+      `absorbs the first 10–15% of losses. tonight it will absorb approximately nothing. ` +
+      `max upside by 6:00 AM: about $${(capTonight(buf[2]) * 20).toFixed(2)} on $20. ` +
+      `outcome period: jul 1, 2026 – jun 30, 2027. you have until 6:00. ` +
+      `*0.40% unitary fee, 0.10% contractually waived. the asterisk is load-bearing.`) +
+    pos;
+  el('etfcash').innerHTML = '$' + S.cash.toFixed(2) + ' <span>ON THE CARD</span>';
+  el('etfwrap').querySelectorAll('.fbuy').forEach(b => {
+    if (+b.dataset.a > S.cash) b.disabled = true;
+    b.onclick = () => buyEtf(b.dataset.f, +b.dataset.a);
+  });
+}
+
+function buyEtf(fid, amt) {
+  const r = etfBuy(fid, amt, S.cash, S.min);
+  if (!r.ok) { toast(r.msg); blip(140, 0.2, 'sawtooth', 0.05); return; }
+  S.cash -= amt;
+  ach('WENT LONG');
+  if (r.f.type === 'lev' && investedIn(fid) >= 30) ach('LEVERAGED');
+  toast(`filled: <b>$${amt} → ${r.f.tk}</b>. settles at 6:00 AM.` +
+    (r.f.caff ? ' this one can feel you drinking.' : ''));
+  blip(880, 0.06, 'triangle', 0.04);
+  renderEtf();
+}
+
+function openEtf() {
+  S.mode = 'etf';
+  document.exitPointerLock?.();
+  S.min = Math.min(S.min + 2, CFG.END_MIN - 0.1);   // checking is never free
+  if (!S.etfOpened) {
+    S.etfOpened = true;
+    toast('it is 3am. the market is closed. the terminal does not care.');
+  }
+  // looking at your own p&l does something to you, but not every two minutes
+  if (etfPositions.length && S.min - S.etfChecked >= 5) {
+    S.etfChecked = S.min;
+    const inSum = etfPositions.reduce((s, p) => s + p.amt, 0);
+    const now = etfPositions.reduce((s, p) => s + liveValue(p), 0);
+    const r = (now - inSum) / inSum;
+    if (r >= 0.004) { S.focus = Math.min(100, S.focus + 4); toast("portfolio's green. weirdly, so is your focus."); }
+    else if (r <= -0.004) { S.focus = Math.max(0, S.focus - 6); toast('you checked. it cost more than the fee.'); }
+  }
+  renderEtf();
+  el('etf').classList.add('on');
+}
+function closeEtf() {
+  el('etf').classList.remove('on');
+  if (!S.over) S.mode = 'play';
+}
+el('etfclose').onclick = closeEtf;
 
 function deliver() {
   const o = S.pending; if (!o) return;
@@ -837,6 +953,8 @@ function interactables() {
   if (near(8.6, 1.1, 2.0)) list.push({ kind: 'poster', label: 'READ THE POSTER', x: 8.6, z: 0.6 });
   // the wall by the door
   if (near(1.3, 2.6, 2.1)) list.push({ kind: 'wall', label: 'READ THE WALL', x: 0.3, z: 2.55 });
+  // the terminal, under the tagline on the east wall
+  if (near(24.45, 6.3, 1.8)) list.push({ kind: 'etf', label: 'CHECK THE TERMINAL', x: 24.95, z: 6.3 });
 
   return list;
 }
@@ -863,12 +981,13 @@ let curTarget = null;
 function onAction() {
   if (!S.running) { if (S.mode !== 'end') startGame(); return; }
   if (S.mode === 'dialogue') { advanceDialogue(); return; }
-  if (S.mode === 'order') return;
+  if (S.mode === 'order' || S.mode === 'etf') return;
   if (S.mode !== 'play') return;
   const t = curTarget;
   if (!t) return;
 
   if (t.kind === 'order') { openOrder(); return; }
+  if (t.kind === 'etf') { openEtf(); return; }
   if (t.kind === 'sit') {
     t.seat.taken = true;
     S.seated = t.seat;
@@ -887,7 +1006,8 @@ function onAction() {
   if (t.kind === 'poster') {
     ach('THERE ARE NO CORGIS');
     openDialogue({ name: 'THE POSTER', sub: 'laminated' }, [
-      'TRUDY, 2 — Chief Morale Officer. Lives upstairs.',
+      "TRUDY, 2 — Chief Morale Officer. Lives upstairs, by the COO's office.",
+      'Walks, meals, and moods are coordinated by her telegram bot. She has better infrastructure than you.',
       'Does not do meet-and-greets. Please stop asking the baristas where the corgis are.',
       'There are no corgis in the cafe.',
     ]);
@@ -1022,22 +1142,6 @@ function resolveChoice(n, tag) {
       return;
     }
     openDialogue(n, d.after.talk);
-    return;
-  }
-  if (n.id === 'atlas') {
-    if (tag === 'set') {
-      ach('DID THE SET');
-      S.min += 12;
-      S.stats.sets++; S.stats.pushups = (S.stats.pushups || 0) + 20;
-      S.focus = Math.min(100, S.focus + 15);
-      addBuff('motiv', 'MOTIVATED ×1.4', 45);
-      toast('twenty reps. <b>12 minutes gone. worth it.</b>');
-      setTimeout(() => openDialogue(n, d.after.set), 260);
-    } else {
-      S.focus = Math.max(0, S.focus - 4);
-      ach('NOTED');
-      setTimeout(() => openDialogue(n, d.after.decline), 260);
-    }
     return;
   }
   if (n.id === 'squirtle') {
@@ -1363,8 +1467,14 @@ function receiptPNG(won) {
     R('PAID OUT', '$' + S.policy.paidOut.toFixed(2));
     R('LOSS RATIO', Math.round(S.policy.paidOut / Math.max(0.01, S.policy.premium) * 100) + '%');
   }
+  if (S.etfSettle) {
+    R('---');
+    R('TERMINAL', 'SETTLED 6:00');
+    S.etfSettle.rows.forEach(r => R(r.tk, (r.pnl >= 0 ? '+' : '-') + '$' + Math.abs(r.pnl).toFixed(2)));
+    R('MGMT FEES', '$' + S.etfSettle.fees.toFixed(6));
+    R('NET P&L', (S.etfSettle.net >= 0 ? '+' : '-') + '$' + Math.abs(S.etfSettle.net).toFixed(2));
+  }
   const freebies = [];
-  if (S.stats.pushups) freebies.push(`PUSHUPS ×${S.stats.pushups}`);
   if (S.ach.has('GNOSIS')) freebies.push('GNOSIS ×1');
   if (S.ach.has('PET THE DOG')) freebies.push('DOG ×1');
   if (S.stats.followers) freebies.push(`FOLLOWERS +${S.stats.followers}`);
@@ -1421,11 +1531,10 @@ function receiptPNG(won) {
   g.font = '800 21px Consolas, Menlo, monospace';
   g.fillStyle = '#2b241e';
   if (won) {
-    g.fillText('STATUS: ESCAPED THE PERMANENT', W / 2, y); y += 30;
-    g.fillText('UNDERCLASS*', W / 2, y); y += 26;
+    g.fillText('STATUS: SHIPPED.', W / 2, y); y += 26;
     g.font = '600 16px Consolas, Menlo, monospace';
     g.fillStyle = '#6b6156';
-    g.fillText('*for one business day', W / 2, y); y += 40;
+    g.fillText('before the sun. barely.', W / 2, y); y += 40;
   } else {
     g.fillText('STATUS: THE SUN CAME UP.', W / 2, y); y += 26;
     g.font = '600 16px Consolas, Menlo, monospace';
@@ -1710,6 +1819,7 @@ function blocked(x, z, r) {
 }
 
 let lastT = performance.now();
+let etfDrawT = 1.5;
 function frame(now) {
   requestAnimationFrame(frame);
   step(now);
@@ -1720,11 +1830,22 @@ function step(now) {
   dt = Math.min(dt, 0.05);
   const t = now / 1000;
 
+  // the terminal feed refreshes on its own schedule
+  etfDrawT -= dt;
+  if (etfDrawT <= 0) {
+    etfDrawT = 2.4;
+    drawTicker(etfCv);
+    etfTex.needsUpdate = true;
+    if (S.mode === 'etf') renderEtf();
+  }
+
   if (S.running && !S.over) {
     // EXPRESS shift: the whole simulation runs at double time — identical
     // balance in game-minutes, half the real minutes. Movement stays 1×.
     const sdt = dt * (S.quick ? 2 : 1);
-    S.min += sdt * CFG.MIN_PER_SEC * (S.mode === 'play' ? 1 : 0.45);
+    const gdt = sdt * CFG.MIN_PER_SEC * (S.mode === 'play' ? 1 : 0.45);
+    S.min += gdt;
+    etfTick(gdt, S.caf);   // the market dreams along at clock speed
 
     // order prep
     if (S.pending) {
@@ -1757,8 +1878,7 @@ function step(now) {
       const cafM = 0.5 + (S.caf / 100) * 1.5;
       const focM = 0.55 + (S.focus / 100) * 0.75;
       const jm = hasBuff('jitters') ? 0.62 : 1;
-      const mm = hasBuff('motiv') ? 1.4 : 1;
-      S.ship = Math.min(100, S.ship + CFG.SHIP_BASE * cafM * focM * jm * mm * sdt);
+      S.ship = Math.min(100, S.ship + CFG.SHIP_BASE * cafM * focM * jm * sdt);
       const resist = 1 - S.caf / 260 - (hasBuff('protein') ? 0.35 : 0);
       const lockMul = S.lockin ? 0.8 : 1;   // the 5am room is kind to focus
       if (!hasBuff('locked')) S.focus = Math.max(0, S.focus - CFG.FOC_DRAIN * lockMul * Math.max(0.3, resist) * sdt);
@@ -2006,7 +2126,6 @@ function receiptHTML(won) {
   ).join('') || '<div class="rrow"><span>nothing ordered</span><i></i><b>0.00</b></div>';
 
   const free = [];
-  if (S.stats.pushups) free.push(`PUSHUPS ×${S.stats.pushups}`);
   if (S.ach.has('GNOSIS')) free.push('GNOSIS ×1');
   if (S.ach.has('PET THE DOG')) free.push('DOG ×1');
   if (S.stats.followers) free.push(`FOLLOWERS +${S.stats.followers}`);
@@ -2031,12 +2150,19 @@ function receiptHTML(won) {
     <div class="rtear"></div>
     <div class="rrow rtotal"><span>TOTAL</span><i></i><b>$${S.stats.spent.toFixed(2)}</b></div>
     ${free.length ? `<div class="rfree">NO CHARGE:<br>${free.join('<br>')}</div>` : ''}
+    ${!S.etfSettle ? '' : `
+    <div class="rtear"></div>
+    <div class="rrow"><span>TERMINAL</span><i></i><b>SETTLED 6:00</b></div>
+    ${S.etfSettle.rows.map(r =>
+      `<div class="rrow"><span>${r.tk}</span><i></i><b class="${r.pnl >= 0 ? 'up' : 'dn'}">${r.pnl >= 0 ? '+' : '-'}$${Math.abs(r.pnl).toFixed(2)}</b></div>`).join('')}
+    <div class="rrow"><span>MGMT FEES</span><i></i><b>$${S.etfSettle.fees.toFixed(6)}</b></div>
+    <div class="rrow"><span>NET P&L</span><i></i><b class="${S.etfSettle.net >= 0 ? 'up' : 'dn'}">${S.etfSettle.net >= 0 ? '+' : '-'}$${Math.abs(S.etfSettle.net).toFixed(2)}</b></div>`}
     ${policyRows}
     <div class="rtear"></div>
     <div class="rrow"><span>COMMITS</span><i></i><b>${S.stats.commits}</b></div>
     <div class="rrow rship"><span>SHIPPED</span><i></i><b>${S.ship.toFixed(0)}%</b></div>
     <div class="rstatus">${won
-      ? 'STATUS: ESCAPED THE PERMANENT<br>UNDERCLASS*<br><span>*for one business day</span>'
+      ? 'STATUS: SHIPPED.<br><span>before the sun. barely.</span>'
       : 'STATUS: THE SUN CAME UP.<br><span>good news: the cafe never closes. run it back.</span>'}</div>
     <div class="rbarcode"></div>
     <div class="rfoot">THERE ARE NO CORGIS · THANK YOU</div>
@@ -2047,6 +2173,16 @@ function endGame(won) {
   S.over = true;
   S.lastWon = won;
   bumpShiftNumber();   // this run now has a number of its own
+
+  // 6:00 AM: the terminal settles, whether you shipped or not
+  if (etfPositions.length) {
+    S.etfSettle = etfSettle(S.min);
+    const fl = S.etfSettle.flags;
+    if (fl.drag) ach('VOLATILITY DRAG');
+    if (fl.capped) ach('HIT THE CAP');
+    if (fl.buffered) ach('FULLY BUFFERED');
+  }
+  el('etf').classList.remove('on');
   // regulars get their table — the one you shipped from
   if (won && S.lastSeat) {
     try {
@@ -2100,10 +2236,11 @@ function shareText() {
     `shipped: ${S.ship.toFixed(0)}%`,
     `clocked out: ${fmtClock(S.min).replace(/<[^>]+>/g, '')}`,
     `drinks: ${S.stats.drinks}  ·  spent: $${S.stats.spent.toFixed(2)}`,
-    `peak caffeine: ${Math.round(S.stats.peakCaf)}  ·  pushups: ${S.stats.pushups || 0}`,
+    `peak caffeine: ${Math.round(S.stats.peakCaf)}`,
+    ...(S.etfSettle ? [`terminal p&l: ${S.etfSettle.net >= 0 ? '+' : '-'}$${Math.abs(S.etfSettle.net).toFixed(2)} overnight`] : []),
     `corgis seen: ${S.ach.has('PET THE DOG') ? 1 : 0}`,
     ``,
-    S.ach.has('SHIPPED') ? 'escaped the permanent underclass (1 business day)' : 'the sun came up. it was not enough.',
+    S.ach.has('SHIPPED') ? 'shipped before the sun. barely.' : 'the sun came up. it was not enough.',
   ];
   return lines.join('\n');
 }
