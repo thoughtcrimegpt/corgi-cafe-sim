@@ -1,15 +1,15 @@
 // CORGI CAFE SIMULATOR — 9 Claude Ln, 24/7.
 // Unofficial fan parody. Menu prices are real; everything else is a joke.
-import * as THREE from '../vendor/three.module.min.js?v=23';
-import { drawCorgi } from './textures.js?v=23';
-import { PHRASES, HANDLE_RE, fetchNotes, pinNote } from './wall.js?v=23';
-import { buildCafe, ROOM } from './world.js?v=23';
-import { buildPeople, animatePeople, DIALOGUE, say } from './people.js?v=23';
-import { MENU, ADDONS, priceOf, rollHelloWorld } from './menu.js?v=23';
+import * as THREE from '../vendor/three.module.min.js?v=24';
+import { drawCorgi } from './textures.js?v=24';
+import { PHRASES, HANDLE_RE, fetchNotes, pinNote } from './wall.js?v=24';
+import { buildCafe, ROOM } from './world.js?v=24';
+import { buildPeople, animatePeople, DIALOGUE, say } from './people.js?v=24';
+import { MENU, ADDONS, priceOf, rollHelloWorld } from './menu.js?v=24';
 import {
   FUNDS, positions as etfPositions, tick as etfTick, buy as etfBuy,
   investedIn, liveValue, pctChange, settle as etfSettle, capTonight, drawTicker,
-} from './etf.js?v=23';
+} from './etf.js?v=24';
 
 const CFG = {
   MIN_PER_SEC: 0.85,      // in-game minutes per real second
@@ -159,6 +159,7 @@ addEventListener('keydown', e => {
   if (e.code === 'Escape' && S.mode === 'order') closeOrder();
   if (e.code === 'Escape' && S.mode === 'wall') closeWall();
   if (e.code === 'Escape' && S.mode === 'etf') closeEtf();
+  if (e.code === 'Escape' && S.mode === 'rsi') closeRsi();
 });
 addEventListener('keyup', e => { for (const c of keyCodes(e)) keys[c] = false; });
 // a stuck key across a focus change is worse than a dropped one
@@ -419,7 +420,8 @@ function fmtClock(m) {
 }
 
 function updateHUD() {
-  el('clock').innerHTML = fmtClock(S.min) + '<div id="clocksub">9 CLAUDE LN · OPEN 24/7</div>';
+  el('clock').innerHTML = fmtClock(S.min) + '<div id="clocksub">' +
+    (S.mode === 'rsi' ? 'PAUSED · INSIDE ANOTHER SIMULATION' : '9 CLAUDE LN · OPEN 24/7') + '</div>';
   el('cash').innerHTML = '$' + S.cash.toFixed(2) + '<div id="cashsub">ON THE CARD</div>';
   el('shipv').textContent = S.ship.toFixed(0) + '%';
   el('focv').textContent = Math.round(S.focus) + (S.sipping && S.sipping.foc > 1 ? ' ▲' : '');
@@ -453,6 +455,7 @@ const ACH_ALL = [
   '$14 BREAKFAST', 'THE PENTAGON', 'WIRED IN', 'ORDERED FOR THE TABLE',
   'CREATINE', 'LOSS RATIO', 'MORAL HAZARD', 'PREFERRED RISK',
   'WENT LONG', 'LEVERAGED', 'VOLATILITY DRAG', 'FULLY BUFFERED', 'HIT THE CAP',
+  'RECURSION',
 ];
 function achEarned() {
   try { return new Set(JSON.parse(localStorage.getItem('ccs_ach') || '[]')); }
@@ -773,6 +776,30 @@ function closeEtf() {
 }
 el('etfclose').onclick = closeEtf;
 
+/* -------------------------------------------------- the old machine --- */
+// someone else's simulator, running in the corner. the shift clock stops
+// entirely while you're inside — recursion gets one courtesy.
+const RSI_URL = 'https://www.paradigm.xyz/research/rsi/game';
+function openRsi() {
+  S.mode = 'rsi';
+  document.exitPointerLock?.();
+  P.pos.set(2.6, 1.22, 1.32); P.yaw = 0; P.pitch = -0.12;
+  const f = el('rsiframe');
+  if (!f.src) f.src = RSI_URL;   // their servers, their game — loaded only when you sit
+  ach('RECURSION');
+  if (!S.rsiToasted) {
+    S.rsiToasted = true;
+    toast('the clock stops. you are in someone else\'s simulation now.');
+  }
+  el('rsi').classList.add('on');
+}
+function closeRsi() {
+  el('rsi').classList.remove('on');
+  P.pos.y = CFG.EYE; P.pos.z = 1.55;
+  if (!S.over) S.mode = 'play';
+}
+el('rsiclose').onclick = closeRsi;
+
 function deliver() {
   const o = S.pending; if (!o) return;
   S.pending = null;
@@ -956,6 +983,8 @@ function interactables() {
   if (near(1.3, 2.6, 2.1)) list.push({ kind: 'wall', label: 'READ THE WALL', x: 0.3, z: 2.55 });
   // the terminal, under the tagline on the east wall
   if (near(24.45, 6.3, 1.8)) list.push({ kind: 'etf', label: 'CHECK THE TERMINAL', x: 24.95, z: 6.3 });
+  // the old machine in the southwest corner
+  if (near(2.6, 1.35, 1.7)) list.push({ kind: 'rsi', label: 'SIT DOWN AT THE OLD MACHINE', x: 2.6, z: 0.7 });
 
   return list;
 }
@@ -982,13 +1011,14 @@ let curTarget = null;
 function onAction() {
   if (!S.running) { if (S.mode !== 'end') startGame(); return; }
   if (S.mode === 'dialogue') { advanceDialogue(); return; }
-  if (S.mode === 'order' || S.mode === 'etf') return;
+  if (S.mode === 'order' || S.mode === 'etf' || S.mode === 'rsi') return;
   if (S.mode !== 'play') return;
   const t = curTarget;
   if (!t) return;
 
   if (t.kind === 'order') { openOrder(); return; }
   if (t.kind === 'etf') { openEtf(); return; }
+  if (t.kind === 'rsi') { openRsi(); return; }
   if (t.kind === 'sit') {
     t.seat.taken = true;
     S.seated = t.seat;
@@ -1843,7 +1873,9 @@ function step(now) {
   if (S.running && !S.over) {
     // EXPRESS shift: the whole simulation runs at double time — identical
     // balance in game-minutes, half the real minutes. Movement stays 1×.
-    const sdt = dt * (S.quick ? 2 : 1);
+    // inside the old machine the cafe holds its breath — sdt 0 freezes the
+    // clock, the market, orders, buffs, caffeine, all of it
+    const sdt = S.mode === 'rsi' ? 0 : dt * (S.quick ? 2 : 1);
     const gdt = sdt * CFG.MIN_PER_SEC * (S.mode === 'play' ? 1 : 0.45);
     S.min += gdt;
     etfTick(gdt, S.caf);   // the market dreams along at clock speed

@@ -1,5 +1,5 @@
 // Procedural canvas textures. No external image assets — everything is drawn at runtime.
-import * as THREE from '../vendor/three.module.min.js?v=21';
+import * as THREE from '../vendor/three.module.min.js?v=24';
 
 export const PAL = {
   orange:  '#e8552f',
@@ -961,3 +961,27 @@ export function skylineTexture(night) {
 }
 
 export { tex as _tex };
+
+// The old machine in the corner — green phosphor boot screen for someone
+// else's simulator. It has been 2017 in there the whole time.
+export function crtTexture() {
+  const c = cv(256, 205), g = c.getContext('2d');
+  g.fillStyle = '#070d08'; g.fillRect(0, 0, 256, 205);
+  g.fillStyle = 'rgba(120,220,140,0.05)';
+  for (let y = 0; y < 205; y += 4) g.fillRect(0, y, 256, 2);
+  g.textAlign = 'center';
+  g.fillStyle = '#7de08f';
+  g.font = '700 34px ui-monospace, Menlo, monospace';
+  g.fillText('RSI.EXE', 128, 74);
+  g.font = '600 13px ui-monospace, Menlo, monospace';
+  g.fillStyle = '#4f9a5e';
+  g.fillText('a game of recursive', 128, 104);
+  g.fillText('self-improvement', 128, 122);
+  g.fillStyle = '#7de08f';
+  g.font = '700 14px ui-monospace, Menlo, monospace';
+  g.fillText('[E] BOOT', 128, 164);
+  g.strokeStyle = 'rgba(125,224,143,0.35)';
+  g.lineWidth = 2;
+  g.strokeRect(6, 6, 244, 193);
+  return tex(c);
+}

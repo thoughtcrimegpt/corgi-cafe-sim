@@ -168,6 +168,14 @@
     padding:5px 9px;font-size:11px;font-weight:700;letter-spacing:.5px;flex-shrink:0;}
   .item .add:hover{background:var(--o);color:#fff;}
 
+  /* the old machine */
+  #rsiwrap{padding:0 20px;}
+  #rsiframe{width:100%;height:min(62vh,540px);border:0;border-radius:10px;background:#f4f1ea;}
+  #rsibar{display:flex;justify-content:space-between;align-items:center;gap:12px;
+    padding:12px 20px 18px;flex-wrap:wrap;}
+  .rsicredit{font-size:11px;opacity:.55;letter-spacing:.4px;}
+  .rsicredit a{color:var(--o2);}
+
   /* the terminal */
   .etfsub{font-size:12.5px;opacity:.78;margin:-2px 22px 2px;line-height:1.5;}
   .etfsub span{opacity:.55;font-size:11px;}
@@ -348,6 +356,16 @@
   </div>
 </div></div>
 
+<div class="panel" id="rsi"><div class="card" style="max-width:min(900px,96vw)">
+  <h2>THE OLD MACHINE</h2>
+  <p class="etfsub">someone else's simulator. the shift clock is paused — in there it has been 2017 the whole time.</p>
+  <div id="rsiwrap"><iframe id="rsiframe" title="RSI Simulator by Paradigm" allow="autoplay"></iframe></div>
+  <div id="rsibar">
+    <span class="rsicredit">RSI Simulator — <a href="https://www.paradigm.xyz/research/rsi/" target="_blank" rel="noopener">dan robinson &amp; justin wang, paradigm</a></span>
+    <button class="btn ghost" id="rsiclose">STAND UP</button>
+  </div>
+</div></div>
+
 <div class="panel" id="etf"><div class="card">
   <h2>CORGI TERMINAL</h2>
   <p class="etfsub">the other menu. the market is closed. these are not.<br>
@@ -417,7 +435,7 @@
 
 <div class="flash" id="flash"></div>
 
-<script type="module" src="./src/main.js?v=23"></script>
+<script type="module" src="./src/main.js?v=24"></script>
 <script>
 // analytics — only on the deployed site, so local dev never counts itself
 if (location.hostname.endsWith("github.io")) {

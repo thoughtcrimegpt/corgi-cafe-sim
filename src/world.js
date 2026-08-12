@@ -1,6 +1,6 @@
 // The cafe itself: geometry, colliders, seats, props.
-import * as THREE from '../vendor/three.module.min.js?v=23';
-import * as T from './textures.js?v=23';
+import * as THREE from '../vendor/three.module.min.js?v=24';
+import * as T from './textures.js?v=24';
 
 export const ROOM = { x0: 0, x1: 25, z0: 0, z1: 10.5, h: 3.5 };
 
@@ -775,6 +775,27 @@ export function buildCafe(scene) {
   const termGlow = new THREE.PointLight(0x59d878, 0.5, 3.2, 2);
   termGlow.position.set(24.4, 1.2, 6.3);
   scene.add(termGlow);
+
+  // the old machine — a beige tower in the southwest corner, running someone
+  // else's simulator. sit down and the shift stops mattering for a while.
+  const deskM = mat('rsidesk', { color: 0x8a6a44 });
+  box(1.3, 0.06, 0.62, deskM, 2.6, 0.76, 0.62);
+  box(0.06, 0.74, 0.58, deskM, 2.02, 0.37, 0.62);
+  box(0.06, 0.74, 0.58, deskM, 3.18, 0.37, 0.62);
+  box(0.5, 0.42, 0.4, mat('rsicase', { color: 0xcfc6b2 }), 2.6, 1.02, 0.5);
+  const rsiScreen = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.4, 0.32),
+    new THREE.MeshBasicMaterial({ map: T.crtTexture() })
+  );
+  rsiScreen.position.set(2.6, 1.03, 0.705);
+  root.add(rsiScreen);
+  box(0.44, 0.03, 0.17, mat('rsikbd', { color: 0xbfb6a2 }), 2.6, 0.795, 0.94);
+  box(0.4, 0.07, 0.4, mat('rsistool', { color: C.chair }), 2.6, 0.46, 1.32);
+  box(0.07, 0.42, 0.07, mat('rsileg', { color: C.dark }), 2.6, 0.21, 1.32);
+  collide(2.6, 0.6, 1.4, 0.8);
+  const crtGlow = new THREE.PointLight(0x7de08f, 0.35, 2.6, 2);
+  crtGlow.position.set(2.6, 1.2, 1.1);
+  scene.add(crtGlow);
 
   // daylight that ramps in at sunrise
   const dawn = new THREE.DirectionalLight(0xffb87a, 0.0);
