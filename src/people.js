@@ -357,6 +357,7 @@ export const DIALOGUE = {
       ["you should log off. i can't. but you should."],
       ["i'm not a doomer. i'm a doomer with good vibes. completely different thing."],
       ["the terminal under the tagline is a smaller egregore. hungrier, though. i've watched it feed."],
+      ["BREAKING: the insurance bus has been parked outside for nine hours. hazards on. nobody has seen the driver. the bus is fine."],
       ["there's a takeoff simulator on the corner machine now. people pause their real deadline to speedrun the end of the world. i respect it."],
     ],
   },

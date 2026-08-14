@@ -37,6 +37,9 @@ On phones: left stick to walk, drag the right side to look, `E` button to intera
 - The terminal on the far wall, under the tagline, sells Corgi's actual ETFs for
   play money — real tickers, real fees, real buffer caps, hallucinated 3 AM prices.
   Positions lock at purchase and settle at 6:00 AM.
+- The claw machine by the door is $1 a play, like the real one. The corgis inside
+  are prizes, which is different from being in the cafe. Win one and it rides
+  along to whatever table you ship from.
 - The old machine in the corner runs [RSI Simulator](https://www.paradigm.xyz/research/rsi/)
   by Dan Robinson & Justin Wang (Paradigm), embedded with the shift clock fully
   paused. A simulation inside the simulation. It has been 2017 in there the whole time.

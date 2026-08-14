@@ -64,6 +64,8 @@ export const PHRASES = [
   'hit the buffer cap. two cents. framing it.',
   'the terminal remembers me now.',
   'reached takeoff on the corner machine. my latte did not.',
+  'lost $4 to the claw. worth it.',
+  'the bus is still out there. hazards on.',
 ];
 
 export const HANDLE_RE = /^[A-Za-z0-9_]{1,15}$/;

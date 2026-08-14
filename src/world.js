@@ -1,6 +1,6 @@
 // The cafe itself: geometry, colliders, seats, props.
-import * as THREE from '../vendor/three.module.min.js?v=24';
-import * as T from './textures.js?v=24';
+import * as THREE from '../vendor/three.module.min.js?v=25';
+import * as T from './textures.js?v=25';
 
 export const ROOM = { x0: 0, x1: 25, z0: 0, z1: 10.5, h: 3.5 };
 
@@ -797,16 +797,127 @@ export function buildCafe(scene) {
   crtGlow.position.set(2.6, 1.2, 1.1);
   scene.add(crtGlow);
 
+  // the claw machine, beside the door like the real one. the only corgis in
+  // the building are in this box, and they are prizes. main.js runs the claw.
+  const clawBodyM = mat('clawbody', { color: 0xf4efe6 });
+  const clawTrimM = mat('clawtrim', { color: 0xe8552f });
+  box(0.62, 0.95, 0.72, clawBodyM, 0.36, 0.475, 3.72);
+  const clawFront = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.58, 0.85),
+    new THREE.MeshBasicMaterial({ map: T.clawFrontTexture() })
+  );
+  clawFront.rotation.y = Math.PI / 2;
+  clawFront.position.set(0.675, 0.48, 3.72);
+  root.add(clawFront);
+  // glass box + orange posts
+  const clawGlass = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.8, 0.7), glass);
+  clawGlass.position.set(0.36, 1.36, 3.72);
+  root.add(clawGlass);
+  for (const [px, pz] of [[0.08, 3.39], [0.08, 4.05], [0.64, 3.39], [0.64, 4.05]]) {
+    box(0.05, 0.82, 0.05, clawTrimM, px, 1.36, pz);
+  }
+  box(0.66, 0.22, 0.78, clawTrimM, 0.36, 1.87, 3.72);
+  const clawMarq = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.74, 0.19),
+    new THREE.MeshBasicMaterial({ map: T.clawMarqueeTexture() })
+  );
+  clawMarq.rotation.y = Math.PI / 2;
+  clawMarq.position.set(0.755, 1.87, 3.72);
+  root.add(clawMarq);
+  // the pile of prizes
+  const PLUSH_C = [0xe8a25a, 0xfdf9f0, 0xf0b0be, 0xb87840, 0xe8a25a, 0xfdf9f0, 0xf0b0be, 0xe8a25a];
+  const plushes = [];
+  [[0.2, 3.5], [0.34, 3.56], [0.48, 3.5], [0.24, 3.7], [0.44, 3.72], [0.32, 3.86], [0.5, 3.9], [0.18, 3.92]].forEach(([px, pz], i) => {
+    const p = new THREE.Mesh(
+      new THREE.BoxGeometry(0.12, 0.09, 0.1),
+      new THREE.MeshLambertMaterial({ color: PLUSH_C[i] })
+    );
+    p.position.set(px, 1.02, pz);
+    p.rotation.y = i * 0.9;
+    root.add(p);
+    plushes.push(p);
+  });
+  const bigPlush = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.13, 0.14), mat('bigplush', { color: 0xe8a25a }));
+  bigPlush.position.set(0.34, 1.12, 3.66);
+  bigPlush.rotation.y = 0.5;
+  root.add(bigPlush);
+  plushes.push(bigPlush);
+  // the claw itself — cable, hub, three fingers. parked until paid.
+  const clawGrp = new THREE.Group();
+  const cable = new THREE.Mesh(new THREE.BoxGeometry(0.014, 1, 0.014), mat('cable', { color: 0x8a8f96 }));
+  const hub = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.06, 0.09), mat('hub', { color: 0xb8bdc4 }));
+  clawGrp.add(hub);
+  const fingers = [];
+  for (let i = 0; i < 3; i++) {
+    const f = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.16, 0.02), mat('finger', { color: 0xcfd4da }));
+    const a = i * (Math.PI * 2 / 3);
+    f.position.set(Math.cos(a) * 0.05, -0.09, Math.sin(a) * 0.05);
+    f.rotation.z = Math.cos(a) * 0.45;
+    f.rotation.x = -Math.sin(a) * 0.45;
+    clawGrp.add(f);
+    fingers.push(f);
+  }
+  clawGrp.position.set(0.36, 1.62, 3.72);
+  root.add(clawGrp);
+  cable.position.set(0.36, 1.79, 3.72);
+  cable.scale.y = 0.34;
+  root.add(cable);
+  collide(0.4, 3.72, 0.95, 0.95);
+  const clawGlow = new THREE.PointLight(0xffb15c, 0.3, 2.4, 2);
+  clawGlow.position.set(0.95, 1.5, 3.72);
+  scene.add(clawGlow);
+  const claw = {
+    grp: clawGrp, cable, fingers, plushes,
+    home: { x: 0.36, y: 1.62, z: 3.72 }, top: 1.95,
+    minZ: 3.46, maxZ: 3.98, dropY: 1.06, chuteZ: 3.46,
+  };
+
+  // the insurance bus, parked across the alley since the last commit.
+  // self-lit like the shopfronts — the alley is never fully dark.
+  const busBodyM = new THREE.MeshBasicMaterial({ color: 0xd85a30 });
+  box(9.6, 1.7, 2.3, busBodyM, 13, 1.45, -4.3);
+  box(1.4, 1.05, 2.1, busBodyM, 18.4, 1.1, -4.3);
+  box(0.2, 0.5, 1.9, mat('busgrille', { color: 0x1a1d24 }), 19.15, 0.85, -4.3);
+  box(9.4, 0.22, 2.2, mat('busroof', { color: 0xf0e8da }), 13, 2.41, -4.3);
+  const busSide = new THREE.Mesh(
+    new THREE.PlaneGeometry(9.4, 1.52),
+    new THREE.MeshBasicMaterial({ map: T.busSideTexture() })
+  );
+  busSide.position.set(13, 1.46, -3.14);
+  root.add(busSide);
+  const busWin = new THREE.Mesh(new THREE.PlaneGeometry(9.0, 0.34), new THREE.MeshBasicMaterial({ color: 0x1a2028 }));
+  busWin.position.set(13, 2.14, -3.141);
+  root.add(busWin);
+  for (const wx of [9.9, 16.1]) {
+    const wh = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.3, 12), mat('buswheel', { color: 0x14161a }));
+    wh.rotation.x = Math.PI / 2;
+    wh.position.set(wx, 0.42, -3.18);
+    root.add(wh);
+  }
+  const hazMat = new THREE.MeshBasicMaterial({ color: 0xffa02a });
+  for (const [hx, hy] of [[8.25, 1.0], [8.25, 2.2], [17.75, 1.0]]) {
+    const hz = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.06), hazMat);
+    hz.position.set(hx, hy, -3.16);
+    root.add(hz);
+  }
+  for (let i = 0; i < 3; i++) {
+    const mk2 = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.08, 0.08), hazMat);
+    mk2.position.set(11.8 + i * 1.2, 2.56, -3.3);
+    root.add(mk2);
+  }
+
   // daylight that ramps in at sunrise
   const dawn = new THREE.DirectionalLight(0xffb87a, 0.0);
   dawn.position.set(10, 8, -14);
   scene.add(dawn);
 
   return {
-    root, colliders, seats, props, drawWall, etfScreen,
+    root, colliders, seats, props, drawWall, etfScreen, claw,
     counter: { x0: CX0, x1: CX1, z0: CZ0, z1: CZ1 },
     sky, skyNight, skyDawn, dawn, hemi, amb, coveLights, mural,
     tickAir(dt, t) {
+      // the bus has its hazards on. it has had its hazards on for hours.
+      hazMat.color.setHex(Math.sin(t * 4.2) > 0 ? 0xffa02a : 0x6b4415);
       const p = moteGeo.attributes.position;
       for (let i = 0; i < moteCount; i++) {
         const m = mseed[i];

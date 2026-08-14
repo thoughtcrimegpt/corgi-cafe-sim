@@ -1,15 +1,15 @@
 // CORGI CAFE SIMULATOR — 9 Claude Ln, 24/7.
 // Unofficial fan parody. Menu prices are real; everything else is a joke.
-import * as THREE from '../vendor/three.module.min.js?v=24';
-import { drawCorgi } from './textures.js?v=24';
-import { PHRASES, HANDLE_RE, fetchNotes, pinNote } from './wall.js?v=24';
-import { buildCafe, ROOM } from './world.js?v=24';
-import { buildPeople, animatePeople, DIALOGUE, say } from './people.js?v=24';
-import { MENU, ADDONS, priceOf, rollHelloWorld } from './menu.js?v=24';
+import * as THREE from '../vendor/three.module.min.js?v=25';
+import { drawCorgi } from './textures.js?v=25';
+import { PHRASES, HANDLE_RE, fetchNotes, pinNote } from './wall.js?v=25';
+import { buildCafe, ROOM } from './world.js?v=25';
+import { buildPeople, animatePeople, DIALOGUE, say } from './people.js?v=25';
+import { MENU, ADDONS, priceOf, rollHelloWorld } from './menu.js?v=25';
 import {
   FUNDS, positions as etfPositions, tick as etfTick, buy as etfBuy,
   investedIn, liveValue, pctChange, settle as etfSettle, capTonight, drawTicker,
-} from './etf.js?v=24';
+} from './etf.js?v=25';
 
 const CFG = {
   MIN_PER_SEC: 0.85,      // in-game minutes per real second
@@ -46,6 +46,7 @@ const S = {
   etfSettle: null,                    // set at 6:00, read by the receipt
   etfOpened: false, etfChecked: -99,  // first-open toast; last position check
   etfHinted: false,                   // the one nudge toward the far wall
+  plush: false, clawFails: 0,         // the claw: prizes won, mercy earned
   eventT: 22,
   trudyT: 62,                         // game-minutes until Trudy comes down
 };
@@ -455,6 +456,7 @@ const ACH_ALL = [
   '$14 BREAKFAST', 'THE PENTAGON', 'WIRED IN', 'ORDERED FOR THE TABLE',
   'CREATINE', 'LOSS RATIO', 'MORAL HAZARD', 'PREFERRED RISK',
   'WENT LONG', 'LEVERAGED', 'VOLATILITY DRAG', 'FULLY BUFFERED', 'HIT THE CAP',
+  'PRIZE OUT',
   'RECURSION',
 ];
 function achEarned() {
@@ -800,6 +802,133 @@ function closeRsi() {
 }
 el('rsiclose').onclick = closeRsi;
 
+/* ------------------------------------------------------- the claw --- */
+// $1 a play. two buttons: start, drop. the rest is physics-adjacent theater.
+// four straight losses and the machine takes mercy — same as the real one, probably.
+const CLAW = { state: 'idle', t: 0, win: false, plush: null };
+
+function clawStart() {
+  if (S.cash < 1) { toast('declined. the claw only takes solvency.'); blip(140, 0.2, 'sawtooth', 0.05); return; }
+  S.cash -= 1;
+  S.stats.spent += 1;
+  S.stats.receipt.push({ n: 'THE CLAW', p: 1, q: 1 });
+  CLAW.state = 'sweep'; CLAW.t = 0;
+  blip(660, 0.06, 'square', 0.03);
+}
+
+function clawDrop() {
+  const c = world.claw;
+  const z = c.grp.position.z;
+  const avail = c.plushes.filter(p => p.visible);
+  let best = null, bd = 1;
+  for (const p of avail) {
+    const d = Math.abs(p.position.z - z);
+    if (d < bd) { bd = d; best = p; }
+  }
+  const pity = S.clawFails >= 3;
+  CLAW.win = pity ? !!best : (!!best && bd < 0.16 && Math.random() < 0.72);
+  CLAW.plush = CLAW.win ? best : null;
+  if (pity && best) c.grp.position.z = best.position.z;
+  CLAW.state = 'drop'; CLAW.t = 0;
+  blip(440, 0.08, 'square', 0.03);
+}
+
+let plushMesh = null;
+function placePlush() {
+  if (!S.plush || !S.seated) return;
+  if (!plushMesh) {
+    plushMesh = new THREE.Group();
+    const bodyM = new THREE.MeshLambertMaterial({ color: 0xe8a25a });
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.09, 0.09), bodyM);
+    body.position.y = 0.045;
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.08), bodyM);
+    head.position.set(-0.1, 0.09, 0);
+    const chest = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.092),
+      new THREE.MeshLambertMaterial({ color: 0xfdf9f0 }));
+    chest.position.set(-0.05, 0.04, 0);
+    const earM = new THREE.MeshLambertMaterial({ color: 0xd88a3a });
+    for (const ez of [-0.025, 0.025]) {
+      const ear = new THREE.Mesh(new THREE.ConeGeometry(0.02, 0.05, 4), earM);
+      ear.position.set(-0.1, 0.15, ez);
+      plushMesh.add(ear);
+    }
+    plushMesh.add(body, head, chest);
+    scene.add(plushMesh);
+  }
+  const t = S.seated.table;
+  plushMesh.position.set(t.x - 0.25, 0.79, t.z + 0.22);
+  plushMesh.rotation.y = Math.random() * 6.3;
+  plushMesh.visible = true;
+}
+
+function winPlush() {
+  S.plush = true;
+  S.clawFails = 0;
+  ach('PRIZE OUT');
+  toast('<b>PRIZE OUT.</b> a corgi is coming home with you. the only sanctioned way.');
+  blip(880, 0.1, 'triangle', 0.05);
+  setTimeout(() => blip(1320, 0.12, 'triangle', 0.04), 90);
+  placePlush();
+}
+
+function updateClaw(dt) {
+  const c = world.claw;
+  if (!c || CLAW.state === 'idle') return;
+  const g = c.grp;
+  CLAW.t += dt;
+  const setCable = () => {
+    c.cable.scale.y = Math.max(0.02, c.top - g.position.y);
+    c.cable.position.set(g.position.x, (c.top + g.position.y) / 2, g.position.z);
+  };
+  const grip = (k) => c.fingers.forEach((f, i) => {
+    const a = i * (Math.PI * 2 / 3);
+    f.rotation.z = Math.cos(a) * (0.45 - k * 0.34);
+    f.rotation.x = -Math.sin(a) * (0.45 - k * 0.34);
+  });
+  if (CLAW.state === 'sweep') {
+    g.position.z = (c.minZ + c.maxZ) / 2 + Math.sin(CLAW.t * 2.4) * (c.maxZ - c.minZ) / 2;
+    setCable();
+    if (CLAW.t > 12) clawDrop();   // the machine gets impatient
+  } else if (CLAW.state === 'drop') {
+    g.position.y = Math.max(c.dropY, c.home.y - CLAW.t * 1.1);
+    setCable();
+    if (g.position.y <= c.dropY) { CLAW.state = 'grab'; CLAW.t = 0; }
+  } else if (CLAW.state === 'grab') {
+    grip(Math.min(1, CLAW.t / 0.3));
+    if (CLAW.t >= 0.45) { CLAW.state = 'rise'; CLAW.t = 0; }
+  } else if (CLAW.state === 'rise') {
+    g.position.y = Math.min(c.home.y, c.dropY + CLAW.t * 1.0);
+    if (CLAW.plush) CLAW.plush.position.set(g.position.x, g.position.y - 0.16, g.position.z);
+    setCable();
+    if (g.position.y >= c.home.y) { CLAW.state = CLAW.win ? 'carry' : 'payout'; CLAW.t = 0; }
+  } else if (CLAW.state === 'carry') {
+    g.position.z += (c.chuteZ - g.position.z) * Math.min(1, dt * 4);
+    if (CLAW.plush) CLAW.plush.position.set(g.position.x, g.position.y - 0.16, g.position.z);
+    setCable();
+    if (Math.abs(g.position.z - c.chuteZ) < 0.02) { CLAW.state = 'payout'; CLAW.t = 0; grip(0); }
+  } else if (CLAW.state === 'payout') {
+    if (CLAW.plush) {
+      CLAW.plush.position.y -= dt * 1.4;
+      if (CLAW.plush.position.y < 0.5) {
+        CLAW.plush.visible = false;
+        CLAW.plush = null;
+        winPlush();
+      }
+    } else if (!CLAW.win) grip(0);
+    if (CLAW.t >= (CLAW.win ? 1.1 : 0.35)) {
+      if (!CLAW.win) {
+        S.clawFails++;
+        toast(['the claw felt nothing.', 'it slipped. they design it to slip.', 'so close. structurally close.'][(Math.random() * 3) | 0]);
+      }
+      CLAW.state = 'return'; CLAW.t = 0;
+    }
+  } else if (CLAW.state === 'return') {
+    g.position.z += (c.home.z - g.position.z) * Math.min(1, dt * 4);
+    setCable();
+    if (Math.abs(g.position.z - c.home.z) < 0.02) CLAW.state = 'idle';
+  }
+}
+
 function deliver() {
   const o = S.pending; if (!o) return;
   S.pending = null;
@@ -983,6 +1112,13 @@ function interactables() {
   if (near(1.3, 2.6, 2.1)) list.push({ kind: 'wall', label: 'READ THE WALL', x: 0.3, z: 2.55 });
   // the terminal, under the tagline on the east wall
   if (near(24.45, 6.3, 1.8)) list.push({ kind: 'etf', label: 'CHECK THE TERMINAL', x: 24.95, z: 6.3 });
+  // the claw machine by the door
+  if (near(1.15, 3.72, 1.7)) {
+    list.push({
+      kind: 'claw', x: 0.36, z: 3.72,
+      label: CLAW.state === 'idle' ? 'THE CLAW — $1' : CLAW.state === 'sweep' ? 'DROP THE CLAW' : 'THE CLAW',
+    });
+  }
   // the old machine in the southwest corner
   if (near(2.6, 1.35, 1.7)) list.push({ kind: 'rsi', label: 'SIT DOWN AT THE OLD MACHINE', x: 2.6, z: 0.7 });
 
@@ -1018,6 +1154,11 @@ function onAction() {
 
   if (t.kind === 'order') { openOrder(); return; }
   if (t.kind === 'etf') { openEtf(); return; }
+  if (t.kind === 'claw') {
+    if (CLAW.state === 'idle') clawStart();
+    else if (CLAW.state === 'sweep') clawDrop();
+    return;
+  }
   if (t.kind === 'rsi') { openRsi(); return; }
   if (t.kind === 'sit') {
     t.seat.taken = true;
@@ -1025,6 +1166,7 @@ function onAction() {
     S.lastSeat = t.seat;
     P.pos.set(t.seat.pos.x, 1.22, t.seat.pos.z);
     P.yaw = t.seat.yaw + Math.PI;
+    placePlush();   // the corgi rides along, table to table
     toast('you are working. focus burns. coffee helps.');
     return;
   }
@@ -1508,6 +1650,7 @@ function receiptPNG(won) {
   const freebies = [];
   if (S.ach.has('GNOSIS')) freebies.push('GNOSIS ×1');
   if (S.ach.has('PET THE DOG')) freebies.push('DOG ×1');
+  if (S.plush) freebies.push('CORGI ×1');
   if (S.stats.followers) freebies.push(`FOLLOWERS +${S.stats.followers}`);
   if (freebies.length) {
     R('---');
@@ -1883,6 +2026,7 @@ function step(now) {
       S.etfHinted = true;
       toast('the green screen under the tagline is new. it is not showing the weather.');
     }
+    updateClaw(dt);
 
     // order prep
     if (S.pending) {
@@ -2165,6 +2309,7 @@ function receiptHTML(won) {
   const free = [];
   if (S.ach.has('GNOSIS')) free.push('GNOSIS ×1');
   if (S.ach.has('PET THE DOG')) free.push('DOG ×1');
+  if (S.plush) free.push('CORGI ×1');
   if (S.stats.followers) free.push(`FOLLOWERS +${S.stats.followers}`);
 
   const policyRows = S.policy ? `
@@ -2275,7 +2420,7 @@ function shareText() {
     `drinks: ${S.stats.drinks}  ·  spent: $${S.stats.spent.toFixed(2)}`,
     `peak caffeine: ${Math.round(S.stats.peakCaf)}`,
     ...(S.etfSettle ? [`terminal p&l: ${S.etfSettle.net >= 0 ? '+' : '-'}$${Math.abs(S.etfSettle.net).toFixed(2)} overnight`] : []),
-    `corgis seen: ${S.ach.has('PET THE DOG') ? 1 : 0}`,
+    `corgis seen: ${(S.ach.has('PET THE DOG') ? 1 : 0) + (S.plush ? 1 : 0)}`,
     ``,
     S.ach.has('SHIPPED') ? 'shipped before the sun. barely.' : 'the sun came up. it was not enough.',
   ];

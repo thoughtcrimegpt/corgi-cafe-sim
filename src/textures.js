@@ -985,3 +985,66 @@ export function crtTexture() {
   g.strokeRect(6, 6, 244, 193);
   return tex(c);
 }
+
+// the claw machine marquee — orange, confident, exactly like the real one
+export function clawMarqueeTexture() {
+  const c = document.createElement('canvas');
+  c.width = 512; c.height = 128;
+  const g = c.getContext('2d');
+  g.fillStyle = '#e8552f'; g.fillRect(0, 0, 512, 128);
+  g.fillStyle = '#c9401f'; g.fillRect(0, 108, 512, 20);
+  drawCorgi(g, 88, 62, 0.55, '#ffffff');
+  g.fillStyle = '#ffffff';
+  g.textAlign = 'left';
+  g.font = '900 52px system-ui, sans-serif';
+  g.fillText('CORGI CAFE', 168, 66);
+  g.font = '700 30px system-ui, sans-serif';
+  g.fillStyle = '#ffe9dc';
+  g.fillText('Play to win!', 172, 102);
+  return tex(c);
+}
+
+// the cabinet front: brand pill and the PRIZE OUT ring
+export function clawFrontTexture() {
+  const c = document.createElement('canvas');
+  c.width = 256; c.height = 320;
+  const g = c.getContext('2d');
+  g.fillStyle = '#f4efe6'; g.fillRect(0, 0, 256, 320);
+  g.fillStyle = '#e8552f';
+  g.beginPath(); g.roundRect(38, 30, 180, 52, 26); g.fill();
+  g.fillStyle = '#fff';
+  g.textAlign = 'center';
+  g.font = '900 26px system-ui, sans-serif';
+  g.fillText('CORGI CAFE', 128, 65);
+  // prize out ring
+  g.strokeStyle = '#ff4d4d'; g.lineWidth = 12;
+  g.beginPath(); g.arc(128, 200, 62, 0, Math.PI * 2); g.stroke();
+  g.fillStyle = '#e33';
+  g.font = '900 30px system-ui, sans-serif';
+  g.fillText('PRIZE', 128, 194);
+  g.fillText('OUT', 128, 228);
+  return tex(c);
+}
+
+// the insurance bus, seen through the glass. protect yourself.
+export function busSideTexture() {
+  const c = document.createElement('canvas');
+  c.width = 1024; c.height = 192;
+  const g = c.getContext('2d');
+  g.fillStyle = '#e8552f'; g.fillRect(0, 0, 1024, 192);
+  const gr = g.createLinearGradient(0, 0, 0, 192);
+  gr.addColorStop(0, 'rgba(255,255,255,0.10)');
+  gr.addColorStop(1, 'rgba(0,0,0,0.12)');
+  g.fillStyle = gr; g.fillRect(0, 0, 1024, 192);
+  g.fillStyle = '#ffffff';
+  g.textAlign = 'left';
+  g.font = '900 64px system-ui, sans-serif';
+  g.fillText('Protect', 60, 84);
+  g.fillText('Yourself', 60, 152);
+  drawCorgi(g, 780, 96, 1.15, '#ffffff');
+  g.font = '700 30px system-ui, sans-serif';
+  g.fillStyle = '#ffe9dc';
+  g.textAlign = 'right';
+  g.fillText('corgi insure', 990, 168);
+  return tex(c);
+}
