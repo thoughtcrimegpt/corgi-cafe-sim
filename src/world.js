@@ -1,6 +1,6 @@
 // The cafe itself: geometry, colliders, seats, props.
-import * as THREE from '../vendor/three.module.min.js?v=25';
-import * as T from './textures.js?v=25';
+import * as THREE from '../vendor/three.module.min.js?v=26';
+import * as T from './textures.js?v=26';
 
 export const ROOM = { x0: 0, x1: 25, z0: 0, z1: 10.5, h: 3.5 };
 
@@ -824,23 +824,45 @@ export function buildCafe(scene) {
   clawMarq.rotation.y = Math.PI / 2;
   clawMarq.position.set(0.755, 1.87, 3.72);
   root.add(clawMarq);
-  // the pile of prizes
-  const PLUSH_C = [0xe8a25a, 0xfdf9f0, 0xf0b0be, 0xb87840, 0xe8a25a, 0xfdf9f0, 0xf0b0be, 0xe8a25a];
+  // the pile of prizes — actual tiny corgis, like the real machine.
+  // body, head, chest, ears; the claw grabs the whole dog.
+  const miniCorgi = (body, chest, ear) => {
+    const g2 = new THREE.Group();
+    const bm = new THREE.MeshLambertMaterial({ color: body });
+    const b = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.07, 0.075), bm);
+    b.position.y = 0.035;
+    const h = new THREE.Mesh(new THREE.BoxGeometry(0.065, 0.065, 0.065), bm);
+    h.position.set(-0.082, 0.075, 0);
+    const ch = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.077),
+      new THREE.MeshLambertMaterial({ color: chest }));
+    ch.position.set(-0.04, 0.032, 0);
+    const em = new THREE.MeshLambertMaterial({ color: ear });
+    for (const ez of [-0.02, 0.02]) {
+      const e = new THREE.Mesh(new THREE.ConeGeometry(0.016, 0.04, 4), em);
+      e.position.set(-0.082, 0.122, ez);
+      g2.add(e);
+    }
+    g2.add(b, h, ch);
+    root.add(g2);
+    return g2;
+  };
+  // tan, cream, and the pink ones from the photo
+  const WAYS = [
+    [0xe8a25a, 0xfdf9f0, 0xd88a3a], [0xf5efe2, 0xffffff, 0xe0d5c2], [0xf0b0be, 0xfdf3f0, 0xdd93a4],
+    [0xe8a25a, 0xfdf9f0, 0xd88a3a], [0xb87840, 0xf0e2ce, 0x9a6234], [0xe8a25a, 0xfdf9f0, 0xd88a3a],
+    [0xf5efe2, 0xffffff, 0xe0d5c2], [0xf0b0be, 0xfdf3f0, 0xdd93a4],
+  ];
   const plushes = [];
   [[0.2, 3.5], [0.34, 3.56], [0.48, 3.5], [0.24, 3.7], [0.44, 3.72], [0.32, 3.86], [0.5, 3.9], [0.18, 3.92]].forEach(([px, pz], i) => {
-    const p = new THREE.Mesh(
-      new THREE.BoxGeometry(0.12, 0.09, 0.1),
-      new THREE.MeshLambertMaterial({ color: PLUSH_C[i] })
-    );
-    p.position.set(px, 1.02, pz);
+    const p = miniCorgi(...WAYS[i]);
+    p.position.set(px, 0.975, pz);
     p.rotation.y = i * 0.9;
-    root.add(p);
     plushes.push(p);
   });
-  const bigPlush = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.13, 0.14), mat('bigplush', { color: 0xe8a25a }));
-  bigPlush.position.set(0.34, 1.12, 3.66);
+  const bigPlush = miniCorgi(0xe8a25a, 0xfdf9f0, 0xd88a3a);
+  bigPlush.scale.setScalar(1.5);
+  bigPlush.position.set(0.34, 1.05, 3.66);
   bigPlush.rotation.y = 0.5;
-  root.add(bigPlush);
   plushes.push(bigPlush);
   // the claw itself — cable, hub, three fingers. parked until paid.
   const clawGrp = new THREE.Group();
